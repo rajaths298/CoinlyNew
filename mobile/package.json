@@ -1,0 +1,38 @@
+{
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo-google-fonts/bebas-neue": "^0.4.1",
+    "@expo-google-fonts/playfair-display": "^0.4.2",
+    "@expo/metro-runtime": "~56.0.11",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-three/fiber": "^9.6.1",
+    "expo": "~56.0.3",
+    "expo-font": "~56.0.5",
+    "expo-gl": "~56.0.5",
+    "expo-splash-screen": "~56.0.9",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2",
+    "three": "^0.162.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "@types/three": "^0.162.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "skip:dashboard": "EXPO_PUBLIC_COINLY_SKIP=dashboard expo start --ios",
+    "skip:lesson": "EXPO_PUBLIC_COINLY_SKIP=lesson expo start --ios",
+    "skip:web": "EXPO_PUBLIC_COINLY_SKIP=dashboard expo start --web"
+  },
+  "private": true
+}
