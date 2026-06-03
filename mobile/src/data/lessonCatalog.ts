@@ -9,9 +9,14 @@ import type {
   LessonDifficulty,
   LessonDomain,
   LessonLevel,
+  LessonPerformance,
   LessonProgress,
   LessonUnit,
   MasteryState,
+  MixedPracticeSession,
+  PersonalFinanceStandard,
+  RealWorldQuest,
+  ReviewQueueItem,
 } from '../types/lesson';
 import type { OnboardingProfile } from '../types/onboarding';
 
@@ -156,6 +161,152 @@ export const competencies: Competency[] = [
     description: 'Model long-term goals, withdrawal risk, tax mix, and retirement accounts.',
   },
 ];
+
+const DOMAIN_TO_STANDARDS: Record<LessonDomain, PersonalFinanceStandard[]> = {
+  foundations: ['spending', 'saving'],
+  budgeting: ['spending', 'saving'],
+  saving: ['saving'],
+  credit: ['credit'],
+  debt: ['credit'],
+  investing: ['investing'],
+  etfs: ['investing'],
+  stocks: ['investing'],
+  crypto: ['investing'],
+  taxes: ['earning', 'investing'],
+  insurance: ['risk'],
+  career: ['earning'],
+  entrepreneurship: ['earning'],
+  advanced: ['investing', 'saving', 'risk'],
+};
+
+const QUEST_BY_DOMAIN: Record<LessonDomain, { title: string; description: string; actions: string[] }> = {
+  foundations: {
+    title: 'Build Your Money Foundation',
+    description: 'Turn this lesson into a real financial habit this week.',
+    actions: [
+      'List your top 3 monthly spending categories and their estimated amounts',
+      'Open a free HYSA (e.g., Marcus, Ally, or SoFi) if you don\'t have one',
+      'Write down one financial decision you\'re facing and name the tradeoff',
+    ],
+  },
+  budgeting: {
+    title: 'Run Your First Zero-Based Budget',
+    description: 'Give every dollar a job for the next 30 days.',
+    actions: [
+      'List all income sources and amounts for this month',
+      'Categorize last month\'s spending into fixed, variable, and saving',
+      'Identify one spending category you can reduce by 10%',
+    ],
+  },
+  saving: {
+    title: 'Set Up Your Savings System',
+    description: 'Automate at least one savings bucket this week.',
+    actions: [
+      'Calculate your emergency fund target (monthly essentials × 3)',
+      'Set up one automatic transfer to a dedicated savings account',
+      'Create a named savings goal with a target date and monthly amount',
+    ],
+  },
+  credit: {
+    title: 'Take Control of Your Credit',
+    description: 'Know your score and make one improvement this month.',
+    actions: [
+      'Check your free credit report at annualcreditreport.com',
+      'Calculate your current credit utilization across all cards',
+      'Set up autopay for at least one credit card to prevent missed payments',
+    ],
+  },
+  debt: {
+    title: 'Map Your Debt and Make a Plan',
+    description: 'List every debt, then choose avalanche or snowball.',
+    actions: [
+      'List all debts with balance, interest rate, and minimum payment',
+      'Calculate the total interest you\'ll pay at current payoff pace',
+      'Make one extra payment — even $10 — toward your highest-rate debt',
+    ],
+  },
+  investing: {
+    title: 'Take Your First Investing Step',
+    description: 'Open or review an investment account this week.',
+    actions: [
+      'Check the expense ratio on your existing funds (or research your first fund)',
+      'Confirm your 401k contribution rate and employer match status',
+      'Set a target asset allocation (% stocks, % bonds) based on your time horizon',
+    ],
+  },
+  etfs: {
+    title: 'Research One ETF You\'d Actually Buy',
+    description: 'Understand what you own before you buy.',
+    actions: [
+      'Look up the top 10 holdings of an index ETF you\'re considering',
+      'Compare expense ratios for two similar ETFs (e.g., VOO vs SPY)',
+      'Calculate how much a 0.5% fee difference costs over 20 years on $10,000',
+    ],
+  },
+  stocks: {
+    title: 'Analyze One Company You Know',
+    description: 'Apply the valuation framework to something familiar.',
+    actions: [
+      'Find the P/E ratio for a company you use daily',
+      'Read one earnings summary or annual report headline',
+      'Write one sentence on why you would or would not invest at the current price',
+    ],
+  },
+  crypto: {
+    title: 'Set Crypto Guardrails for Yourself',
+    description: 'Write your personal crypto policy before touching any money.',
+    actions: [
+      'Decide your maximum crypto allocation as a % of your portfolio',
+      'Research the use case (not just price) of one token you find interesting',
+      'Identify the exchange fee structure before making any trade',
+    ],
+  },
+  taxes: {
+    title: 'Audit Your Tax Situation',
+    description: 'Find one tax move you can make before year-end.',
+    actions: [
+      'Check your W-4 withholding and adjust if you got a large refund or owed a lot',
+      'List any deductible expenses you\'re not currently tracking',
+      'Confirm you\'re contributing to at least one tax-advantaged account',
+    ],
+  },
+  insurance: {
+    title: 'Review Your Insurance Gaps',
+    description: 'Find one coverage gap and make a plan to fix it.',
+    actions: [
+      'Check your health insurance deductible and confirm you have that amount in savings',
+      'Review your renters or homeowners policy for personal property limits',
+      'Verify your emergency fund can cover your highest insurance deductible',
+    ],
+  },
+  career: {
+    title: 'Improve Your Income Picture',
+    description: 'Take one step toward higher or more resilient income this month.',
+    actions: [
+      'Research market salary for your role on Levels.fyi, Glassdoor, or LinkedIn',
+      'List the total value of your benefits package (health, 401k match, PTO)',
+      'Identify one skill gap standing between your current role and the next level',
+    ],
+  },
+  entrepreneurship: {
+    title: 'Run the Numbers on a Business Idea',
+    description: 'Turn a back-of-napkin idea into a real financial model.',
+    actions: [
+      'Estimate variable cost per unit or per customer for a product or service idea',
+      'Calculate break-even volume at two different price points',
+      'Write one sentence on the biggest financial risk of the idea',
+    ],
+  },
+  advanced: {
+    title: 'Build Your Integrated Money Plan',
+    description: 'Connect your financial domains into one coherent picture.',
+    actions: [
+      'Calculate your current savings rate (savings / gross income)',
+      'Compute your debt-to-income ratio (monthly debt payments / gross monthly income)',
+      'Write a one-page financial statement: income, net worth, and top 3 goals',
+    ],
+  },
+};
 
 const levelBlueprints: LevelBlueprint[] = [
   {
@@ -423,18 +574,85 @@ export function getCourseModules(profile?: OnboardingProfile) {
   });
 }
 
+export function normalizeReviewQueue(progress: LessonProgress): ReviewQueueItem[] {
+  const now = new Date().toISOString();
+  const fromV1: ReviewQueueItem[] = (progress.reviewQueue ?? []).map((lessonId) => ({
+    lessonId,
+    interval: 1,
+    ease: 2.0,
+    dueDate: now,
+    lapses: 0,
+  }));
+  const v2 = progress.reviewQueueV2 ?? [];
+  const merged = [...v2];
+  fromV1.forEach((item) => {
+    if (!merged.some((existing) => existing.lessonId === item.lessonId)) {
+      merged.push(item);
+    }
+  });
+  return merged;
+}
+
+export function getReviewQueueDueToday(progress: LessonProgress): ReviewQueueItem[] {
+  const now = Date.now();
+  return normalizeReviewQueue(progress)
+    .filter((item) => new Date(item.dueDate).getTime() <= now)
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+}
+
+export function updateReviewItemAfterLesson(
+  progress: LessonProgress,
+  lessonId: string,
+  wasCorrect: boolean,
+): LessonProgress {
+  const queue = normalizeReviewQueue(progress);
+  const existing = queue.find((item) => item.lessonId === lessonId) ?? {
+    lessonId,
+    interval: 1,
+    ease: 2.0,
+    dueDate: new Date().toISOString(),
+    lapses: 0,
+  };
+
+  let newInterval: number;
+  let newEase: number;
+  let newLapses: number;
+
+  if (wasCorrect) {
+    newInterval = Math.min(180, Math.round(existing.interval * existing.ease));
+    newEase = Math.min(2.5, existing.ease + 0.1);
+    newLapses = existing.lapses;
+  } else {
+    newInterval = 1;
+    newEase = Math.max(1.3, existing.ease - 0.2);
+    newLapses = existing.lapses + 1;
+  }
+
+  const dueDate = new Date(Date.now() + newInterval * 24 * 60 * 60 * 1000).toISOString();
+  const updated: ReviewQueueItem = { lessonId, interval: newInterval, ease: newEase, dueDate, lapses: newLapses };
+  const reviewQueueV2 = [
+    ...queue.filter((item) => item.lessonId !== lessonId),
+    updated,
+  ].slice(-24);
+
+  return { ...progress, reviewQueueV2 };
+}
+
 export function getReviewLessons(progress: LessonProgress, profile?: OnboardingProfile) {
-  const queued = (progress.reviewQueue ?? [])
-    .map((lessonId) => getLessonById(lessonId))
+  const dueItems = getReviewQueueDueToday(progress);
+  const queued = dueItems
+    .map((item) => getLessonById(item.lessonId))
     .filter((lesson): lesson is Lesson => Boolean(lesson));
+
   const missedCompetencies = new Set(
     (progress.assessmentResults ?? [])
       .flatMap((result) => (result.passed ? [] : result.missedCompetencyIds)),
   );
-  const adaptive = prioritizeLessons(lessonCatalog, profile).filter((lesson) => (
+  const candidateAdaptive = prioritizeLessons(lessonCatalog, profile).filter((lesson) => (
     !progress.completedLessonIds.includes(lesson.id)
     && lesson.competencyIds.some((competencyId) => missedCompetencies.has(competencyId))
   ));
+  const adaptive = weightLessonsByMastery(candidateAdaptive, progress);
 
   return [...queued, ...adaptive].filter((lesson, index, list) => (
     list.findIndex((candidate) => candidate.id === lesson.id) === index
@@ -447,6 +665,98 @@ export function getUpcomingAssessment(progress: LessonProgress, profile?: Onboar
     .flatMap((module) => [module.examLessonId, module.projectLessonId])
     .map((lessonId) => getLessonById(lessonId))
     .find((lesson): lesson is Lesson => lesson !== undefined && !progress.completedLessonIds.includes(lesson.id));
+}
+
+export function weightLessonsByMastery(lessons: Lesson[], progress: LessonProgress): Lesson[] {
+  const masteryMap: Partial<Record<CompetencyId, number>> = {};
+  const mastery = progress.mastery ?? {};
+  for (const competencyId of Object.keys(mastery) as CompetencyId[]) {
+    const state = mastery[competencyId];
+    if (!state) continue;
+    const percent = Math.round(
+      state.conceptScore * 0.28
+      + state.applicationScore * 0.32
+      + state.quizScore * 0.24
+      + state.projectScore * 0.16,
+    );
+    masteryMap[competencyId] = percent;
+  }
+
+  const getWeakness = (lesson: Lesson): number => {
+    if (lesson.competencyIds.length === 0) return 0;
+    const total = lesson.competencyIds.reduce((sum, id) => sum + (100 - (masteryMap[id] ?? 0)), 0);
+    return total / lesson.competencyIds.length;
+  };
+
+  return [...lessons].sort((a, b) => getWeakness(b) - getWeakness(a));
+}
+
+export function getMixedPracticeSession(progress: LessonProgress, profile?: OnboardingProfile): MixedPracticeSession | null {
+  const completedIds = new Set(progress.completedLessonIds);
+  const pool = weightLessonsByMastery(
+    prioritizeLessons(lessonCatalog, profile).filter((lesson) => completedIds.has(lesson.id)),
+    progress,
+  );
+
+  const practiceStepTypes = new Set(['quiz', 'scenario', 'calculator', 'decision', 'simulation'] as const);
+  type PracticeStep = { step: LessonActivity; lesson: Lesson };
+  const candidates: PracticeStep[] = [];
+  const usedCompetencies = new Set<CompetencyId>();
+
+  for (const lesson of pool) {
+    for (const step of lesson.steps) {
+      if (practiceStepTypes.has(step.type as typeof practiceStepTypes extends Set<infer T> ? T : never)) {
+        const lessonCompetency = lesson.competencyIds[0];
+        if (lessonCompetency && !usedCompetencies.has(lessonCompetency)) {
+          candidates.push({ step, lesson });
+          usedCompetencies.add(lessonCompetency);
+        }
+      }
+    }
+    if (candidates.length >= 8) break;
+  }
+
+  if (candidates.length < 4) return null;
+
+  const selected = candidates.slice(0, 8);
+  const steps = selected.map((c) => c.step);
+  const sourceLessonIds = [...new Set(selected.map((c) => c.lesson.id))];
+  const competencyIds = [...new Set(selected.flatMap((c) => c.lesson.competencyIds))].slice(0, 6) as CompetencyId[];
+  const xp = Math.round(steps.length * 6);
+
+  return {
+    id: `mixed-practice-${Date.now()}`,
+    title: 'Mixed Practice',
+    steps,
+    sourceLessonIds,
+    competencyIds,
+    xp,
+  };
+}
+
+export function mixedPracticeToLesson(session: MixedPracticeSession): Lesson {
+  return {
+    id: session.id,
+    title: session.title,
+    domain: 'foundations',
+    level: 'applied',
+    unitId: 'mixed-practice',
+    unitTitle: 'Mixed Practice',
+    courseTrackId: 'foundations',
+    moduleId: 'mixed-practice',
+    durationMinutes: Math.round(session.steps.length * 1.5),
+    xp: session.xp,
+    prerequisites: [],
+    difficulty: 2,
+    learningObjectives: ['Practice distinguishing related concepts across multiple topics'],
+    competencyIds: session.competencyIds,
+    competencyTags: ['Mixed Practice'],
+    masteryWeight: 0,
+    formulaRefs: [],
+    misconceptions: [],
+    steps: session.steps,
+    standardsDomains: [],
+  };
 }
 
 export function getMasterySnapshot(progress: LessonProgress): MasterySnapshot[] {
@@ -485,7 +795,7 @@ export function getModuleCompletion(module: LessonUnit | CourseModule, progress:
   };
 }
 
-export function applyLessonCompletionToProgress(current: LessonProgress, lesson: Lesson): LessonProgress {
+export function applyLessonCompletionToProgress(current: LessonProgress, lesson: Lesson, performance?: LessonPerformance): LessonProgress {
   if (current.completedLessonIds.includes(lesson.id)) return current;
 
   const completedLessonIds = [...current.completedLessonIds, lesson.id];
@@ -525,12 +835,29 @@ export function applyLessonCompletionToProgress(current: LessonProgress, lesson:
     });
   }
 
+  const isReviewable = lesson.steps.some((step) => step.type === 'quiz' || step.type === 'calculator');
   const reviewQueue = [
     ...new Set([
       ...(current.reviewQueue ?? []).filter((lessonId) => lessonId !== lesson.id),
-      ...(lesson.steps.some((step) => step.type === 'quiz' || step.type === 'calculator') ? [lesson.id] : []),
+      ...(isReviewable ? [lesson.id] : []),
     ]),
   ].slice(-12);
+
+  let reviewQueueV2 = current.reviewQueueV2 ?? [];
+  if (isReviewable) {
+    const existing = reviewQueueV2.find((item) => item.lessonId === lesson.id);
+    const newItem: ReviewQueueItem = existing ?? {
+      lessonId: lesson.id,
+      interval: 1,
+      ease: 2.0,
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      lapses: 0,
+    };
+    reviewQueueV2 = [
+      ...reviewQueueV2.filter((item) => item.lessonId !== lesson.id),
+      newItem,
+    ].slice(-24);
+  }
 
   const certificates = [...(current.certificates ?? [])];
   const module = courseModules.find((candidate) => candidate.id === lesson.moduleId);
@@ -538,16 +865,92 @@ export function applyLessonCompletionToProgress(current: LessonProgress, lesson:
     certificates.push(module.id);
   }
 
+  let earnedXp = lesson.xp;
+  const badges = [...(current.badges ?? [])];
+
+  if (performance) {
+    if (performance.hasRushedSteps) {
+      earnedXp = Math.round(earnedXp * 0.8);
+    } else if (performance.totalScoredSteps > 0 && performance.firstTryCorrectCount === performance.totalScoredSteps) {
+      earnedXp = Math.round(earnedXp * 1.2);
+      badges.push(`perfect-${lesson.id}`);
+    }
+  }
+
+  const newXp = current.xp + earnedXp;
+  const perfectCount = badges.filter((b) => b.startsWith('perfect-')).length;
+  const streakFreezes = perfectCount > 0 && perfectCount % 5 === 0
+    ? (current.streakFreezes ?? 0) + 1
+    : (current.streakFreezes ?? 0);
+
+  // Brain Bucks: 10–30 based on XP, scaled by accuracy
+  const bbBase = Math.round(earnedXp * 0.3);
+  const newBrainBucks = (current.brainBucks ?? 0) + bbBase;
+
+  // Daily XP tracking
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const lastDate = current.lastStreakDate;
+  const isNewDay = !lastDate || lastDate !== todayDate;
+  const newDailyXpEarned = isNewDay ? earnedXp : (current.dailyXpEarned ?? 0) + earnedXp;
+
+  // Streak: increment only once per day
+  const newStreak = isNewDay
+    ? (lastDate && isConsecutiveDay(lastDate, todayDate))
+      ? current.streak + 1
+      : 1
+    : current.streak;
+
   return {
     ...current,
     completedLessonIds,
-    xp: current.xp + lesson.xp,
-    streak: Math.max(1, current.streak + 1),
+    xp: newXp,
+    streak: newStreak,
+    lastStreakDate: isNewDay ? todayDate : (current.lastStreakDate ?? todayDate),
+    dailyXpEarned: newDailyXpEarned,
+    brainBucks: newBrainBucks,
     activeLessonId: lesson.id,
     mastery,
     assessmentResults,
     reviewQueue,
+    reviewQueueV2,
     certificates: [...new Set(certificates)],
+    badges: [...new Set(badges)],
+    streakFreezes,
+  };
+}
+
+function isConsecutiveDay(prev: string, curr: string): boolean {
+  const prevDate = new Date(prev);
+  const currDate = new Date(curr);
+  const diff = currDate.getTime() - prevDate.getTime();
+  return diff >= 86400000 && diff < 172800000; // between 1 and 2 days apart
+}
+
+export function applyQuestCompletionToProgress(
+  progress: LessonProgress,
+  questId: string,
+  xpReward: number,
+  badgeId: string,
+): LessonProgress {
+  const completedQuestIds = progress.completedQuestIds ?? [];
+  if (completedQuestIds.includes(questId)) return progress;
+  return {
+    ...progress,
+    xp: progress.xp + xpReward,
+    completedQuestIds: [...completedQuestIds, questId],
+    badges: [...new Set([...(progress.badges ?? []), badgeId])],
+  };
+}
+
+function buildRealWorldQuest(track: TrackBlueprint, level: LevelBlueprint): RealWorldQuest {
+  const template = QUEST_BY_DOMAIN[track.id];
+  return {
+    id: `quest-${track.id}-${level.id}`,
+    title: template.title,
+    description: template.description,
+    actions: template.actions,
+    xpReward: 25 + getLevelRank(level.id) * 10,
+    badgeId: `quest-${track.id}-${level.id}`,
   };
 }
 
@@ -662,6 +1065,8 @@ function buildLesson(input: {
     formulaRefs: topic.formulaRef ? [topic.formulaRef] : [],
     misconceptions: [topic.misconception],
     steps: buildLessonActivities(track, level, topic, topicIndex, variant, competencyId, id),
+    standardsDomains: DOMAIN_TO_STANDARDS[track.id] ?? [],
+    quickRecall: buildQuickRecallSteps(topic, id),
   };
 }
 
@@ -700,7 +1105,41 @@ function buildAssessmentLesson(input: {
     steps: isExam
       ? buildExamActivities(track, level, id)
       : buildProjectActivities(track, level, id),
+    standardsDomains: DOMAIN_TO_STANDARDS[track.id] ?? [],
+    realWorldQuest: isExam ? undefined : buildRealWorldQuest(track, level),
   };
+}
+
+function buildFreeRecallStep(topic: TopicBlueprint, lessonId: string): LessonActivity {
+  return {
+    id: `${lessonId}-freeRecall`,
+    type: 'freeRecall',
+    title: 'Brain dump',
+    body: `Before seeing the summary, write everything you remember about ${topic.title.toLowerCase()}. Speed does not matter — completeness does.`,
+    prompt: `What do you already know about ${topic.title.toLowerCase()}?`,
+    recallChecklist: [
+      `I can name the main rule or formula for ${topic.title.toLowerCase()}`,
+      `I can describe one real-world example`,
+      `I know the most common mistake to avoid`,
+    ],
+  };
+}
+
+function buildQuickRecallSteps(topic: TopicBlueprint, lessonId: string): LessonActivity[] {
+  return [
+    {
+      id: `${lessonId}-recall-1`,
+      type: 'freeRecall',
+      title: 'Quick recall',
+      body: 'Before finishing, check what stuck.',
+      prompt: `Without looking back: what is the core rule for ${topic.title.toLowerCase()}?`,
+      recallChecklist: [
+        'I can state it in one sentence',
+        'I can connect it to a dollar amount or percentage',
+        'I know when this rule does NOT apply',
+      ],
+    },
+  ];
 }
 
 function buildLessonActivities(
@@ -720,6 +1159,9 @@ function buildLessonActivities(
     prompt: buildKeyIdea(topic, level),
     reveal: buildWorkedExample(track, topic),
     masteryWeight: 1,
+    recallPrompt: variant !== 'lab'
+      ? `Before reading: what do you already know about ${topic.focus}?`
+      : undefined,
   };
 
   if (variant === 'seminar') {
@@ -781,6 +1223,7 @@ function buildLessonActivities(
       body: `Turn this case into a personal rule. The best rule is specific enough to guide a future decision and flexible enough to survive a changed situation.`,
       prompt: `When I face ${topic.title.toLowerCase()}, I will...`,
     },
+    buildFreeRecallStep(topic, lessonId),
     buildQuizActivity(topic, level, lessonId),
   ];
 }
@@ -969,6 +1412,7 @@ function buildDecisionChoices(topic: TopicBlueprint, level: LevelBlueprint, comp
       id: 'measure',
       text: 'Check one number, name the tradeoff, then choose the next action',
       outcome: `Strong ${level.title.toLowerCase()} move. You used ${topic.title.toLowerCase()} to turn ${getCompetencyTitle(competencyId).toLowerCase()} into a decision, not a guess.`,
+      rationale: `This is correct because structured decisions — number, tradeoff, action — reduce the chance of a bias-driven mistake and create a repeatable process for ${topic.title.toLowerCase()}.`,
       score: 3,
       correct: true,
     },
@@ -976,12 +1420,14 @@ function buildDecisionChoices(topic: TopicBlueprint, level: LevelBlueprint, comp
       id: 'wait',
       text: 'Wait until the choice feels obvious',
       outcome: 'Waiting can help, but unmanaged uncertainty can become a hidden cost.',
+      rationale: `Waiting without a framework just delays the same uncertainty. The right move for ${topic.title.toLowerCase()} is to find the key number that makes the tradeoff visible, not to wait for clarity that may never arrive.`,
       score: 1,
     },
     {
       id: 'follow',
       text: 'Copy what most people around you do',
       outcome: 'Social proof can be noisy. Your cash flow, risk, and goals are specific.',
+      rationale: `Social defaults are built around average situations. Your income, obligations, and timeline are specific — ${topic.title.toLowerCase()} decisions need to reflect your numbers, not someone else's.`,
       score: 0,
     },
   ];
@@ -1017,6 +1463,7 @@ function buildCaseChoices(topic: TopicBlueprint) {
       id: 'balanced',
       text: 'Use the relevant number, name the risk, and choose the reversible next step',
       outcome: `Strong case answer. It uses ${topic.title.toLowerCase()} without pretending the future is certain.`,
+      rationale: `This wins because it combines the calculation (grounds the decision in evidence), the risk (protects against the main downside), and reversibility (limits the cost of being wrong). That trifecta is what separates mastery-level ${topic.title.toLowerCase()} thinking from guessing.`,
       score: 3,
       correct: true,
     },
@@ -1024,12 +1471,14 @@ function buildCaseChoices(topic: TopicBlueprint) {
       id: 'maximum',
       text: 'Choose the option with the largest upside number',
       outcome: 'Upside matters, but mastery also checks downside, timing, and behavior.',
+      rationale: `Maximizing upside ignores the probability and magnitude of the downside. For ${topic.title.toLowerCase()}, the risk-adjusted decision — not the highest headline number — is the right framework. A large upside with a catastrophic downside is still a bad bet.`,
       score: 1,
     },
     {
       id: 'comfort',
       text: 'Choose the option that feels least stressful today',
       outcome: 'Stress is information, but it should not replace analysis.',
+      rationale: `Emotional comfort is a useful signal, but it is not a substitute for the numbers. With ${topic.title.toLowerCase()}, the least-stressful option today can be the most costly option over time if it defers a real problem or avoids a necessary tradeoff.`,
       score: 1,
     },
   ];
@@ -1042,18 +1491,21 @@ function buildQuizChoices(topic: TopicBlueprint) {
       text: `Use ${topic.title.toLowerCase()} to compare options, check the main number, and choose the next action`,
       correct: true,
       outcome: 'Correct. Financial literacy is applied judgment, not trivia.',
+      rationale: `This is the right answer because applying the concept to a real comparison — with a number and a next action — is the definition of financial competency. Knowing a term without being able to use it in a decision is not mastery.`,
       score: 3,
     },
     {
       id: 'label',
       text: `Memorize the definition of ${topic.title.toLowerCase()} and stop there`,
       outcome: 'Definitions help, but mastery requires applying the idea.',
+      rationale: `Memorizing the definition is the starting point, not the finish line. This lesson measures whether you can use ${topic.title.toLowerCase()} to compare two real options — not just recite what the term means.`,
       score: 1,
     },
     {
       id: 'shortcut',
       text: topic.misconception,
       outcome: 'That is the common trap this lesson is trying to remove.',
+      rationale: `This is the most common misconception about ${topic.title.toLowerCase()}: "${topic.misconception}". The lesson specifically targets this belief because it leads to avoidable financial mistakes when left unchallenged.`,
       score: 0,
     },
   ];

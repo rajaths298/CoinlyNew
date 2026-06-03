@@ -39,7 +39,8 @@ export type LessonActivityType =
   | 'quiz'
   | 'caseStudy'
   | 'project'
-  | 'exam';
+  | 'exam'
+  | 'freeRecall';
 
 export type LessonStepType = LessonActivityType;
 
@@ -110,6 +111,7 @@ export type LessonChoice = {
   correct?: boolean;
   outcome?: string;
   score?: number;
+  rationale?: string;
 };
 
 export type SortItem = {
@@ -142,6 +144,8 @@ export type LessonActivity = {
   simulationGoal?: string;
   projectDeliverable?: string;
   masteryWeight?: number;
+  recallPrompt?: string;
+  recallChecklist?: string[];
 };
 
 export type LessonStep = LessonActivity;
@@ -171,6 +175,14 @@ export type CourseModule = {
 
 export type LessonDifficulty = 1 | 2 | 3 | 4 | 5;
 
+export type PersonalFinanceStandard =
+  | 'earning'
+  | 'spending'
+  | 'saving'
+  | 'investing'
+  | 'credit'
+  | 'risk';
+
 export type Lesson = {
   id: string;
   title: string;
@@ -191,6 +203,11 @@ export type Lesson = {
   formulaRefs: string[];
   misconceptions: string[];
   steps: LessonStep[];
+  standardsDomains?: PersonalFinanceStandard[];
+  quickRecall?: LessonActivity[];
+  realWorldQuest?: RealWorldQuest;
+  // new: rich exercise format for the Duolingo-style player
+  exercises?: import('./learn').Exercise[];
 };
 
 export type LessonUnit = {
@@ -211,6 +228,38 @@ export type ActivityResponse = {
   value: string | number | string[];
   isCorrect?: boolean;
   score?: number;
+};
+
+export type RealWorldQuest = {
+  id: string;
+  title: string;
+  description: string;
+  actions: string[];
+  xpReward: number;
+  badgeId: string;
+};
+
+export type MixedPracticeSession = {
+  id: string;
+  title: string;
+  steps: LessonActivity[];
+  sourceLessonIds: string[];
+  competencyIds: CompetencyId[];
+  xp: number;
+};
+
+export type LessonPerformance = {
+  firstTryCorrectCount: number;
+  totalScoredSteps: number;
+  hasRushedSteps: boolean;
+};
+
+export type ReviewQueueItem = {
+  lessonId: string;
+  interval: number;
+  ease: number;
+  dueDate: string;
+  lapses: number;
 };
 
 export type AssessmentResult = {
@@ -242,5 +291,18 @@ export type LessonProgress = {
   mastery?: Partial<Record<CompetencyId, MasteryState>>;
   assessmentResults?: AssessmentResult[];
   reviewQueue?: string[];
+  reviewQueueV2?: ReviewQueueItem[];
   certificates?: string[];
+  badges?: string[];
+  streakFreezes?: number;
+  completedQuestIds?: string[];
+  // new gamification fields (all optional, safe defaults)
+  brainBucks?: number;
+  dailyXpGoal?: number;
+  dailyXpEarned?: number;
+  lastStreakDate?: string;
+  unitMastery?: Partial<Record<string, import('./learn').MasteryTier>>;
+  completedChestIds?: string[];
+  dailyQuestProgress?: import('./learn').DailyQuestProgress;
+  schemaVersion?: number;
 };

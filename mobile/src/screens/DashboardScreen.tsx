@@ -20,24 +20,28 @@ import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { gameDefinitions } from '../data/gameDefinitions';
 import {
-  courseTracks,
-  getLessonById,
-  getMasterySnapshot,
-  getModuleCompletion,
-  getNextLesson,
-  getReviewLessons,
-  getUnitsForTree,
-  getUpcomingAssessment,
-  isLessonSoftLocked,
-  lessonCatalog,
-} from '../data/lessonCatalog';
+  computeNodeStates,
+  getNextPathLesson,
+  getPathLessonById,
+  getPathProgress,
+  getPathUnits,
+  getUnitMasteryTier,
+  getUnitState,
+  type UnitState,
+} from '../data/pathCatalog';
+import LearnHUD from '../components/path/LearnHUD';
+import PathNodeButton from '../components/path/PathNodeButton';
+import PathSegment from '../components/path/PathSegment';
 import { fetchMarketAssets, searchAssetsByQuery, fetchLiveQuote, fetchFinanceNews, type MarketAsset, type FinanceNewsItem, type SearchResult } from '../services/marketData';
 import { askCoinlyAI, getCoinlyAiConnectionHelp, type FinancialContext } from '../services/aiAdvisor';
 import { appColors as colors } from '../theme';
+import { ICON } from '../components/ui/icons';
 import type { GameDefinition, GameId, GameProgress } from '../types/game';
 import type { Lesson, LessonProgress } from '../types/lesson';
 import type { OnboardingProfile } from '../types/onboarding';
 import BudgetStudio from './BudgetStudio';
+
+type DashboardTab = 'home' | 'learn' | 'games' | 'budget' | 'explore';
 
 type Props = {
   aiHeaderButton?: React.ReactNode;
@@ -46,9 +50,9 @@ type Props = {
   gameProgress: GameProgress;
   onOpenLesson: (lesson: Lesson) => void;
   onLaunchGame: (gameId: GameId) => void;
+  onChestOpened?: (chestId: string, reward: { brainBucks: number; xp: number }) => void;
+  initialTab?: DashboardTab;
 };
-
-type DashboardTab = 'home' | 'learn' | 'games' | 'budget' | 'explore';
 
 const tabItems: Array<{ id: DashboardTab; label: string; icon: string }> = [
   { id: 'home', label: 'Home', icon: 'H' },
@@ -65,13 +69,15 @@ export default function DashboardScreen({
   gameProgress,
   onOpenLesson,
   onLaunchGame,
+  onChestOpened,
+  initialTab,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
     BebasNeue_400Regular,
   });
-  const [activeTab, setActiveTab] = useState<DashboardTab>('home');
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab ?? 'home');
   const [marketAssets, setMarketAssets] = useState<MarketAsset[]>([]);
   const [marketStatus, setMarketStatus] = useState<'loading' | 'ready' | 'fallback'>('loading');
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -80,16 +86,15 @@ export default function DashboardScreen({
   const tabTranslateY = useRef(new Animated.Value(0)).current;
   const loadingProgress = useRef(new Animated.Value(0)).current;
 
-  const nextLesson = useMemo(
-    () => getNextLesson(lessonProgress.completedLessonIds, profile),
-    [lessonProgress.completedLessonIds, profile],
+  const nextPathLesson = useMemo(
+    () => getNextPathLesson(lessonProgress),
+    [lessonProgress],
   );
-  const treeUnits = useMemo(() => getUnitsForTree(profile), [profile]);
+  const pathProgress = useMemo(
+    () => getPathProgress(lessonProgress),
+    [lessonProgress],
+  );
   const firstName = profile.user.name.split(' ')[0] || profile.user.name;
-  const progressPercent = Math.min(
-    100,
-    Math.round((lessonProgress.completedLessonIds.length / lessonCatalog.length) * 100),
-  );
 
   useEffect(() => {
     let isMounted = true;
@@ -184,24 +189,25 @@ export default function DashboardScreen({
             transform: [{ translateY: tabTranslateY }],
           }}
         >
-          {activeTab === 'home' && nextLesson ? (
+          {activeTab === 'home' ? (
             <HomeTab
               firstName={firstName}
               lessonProgress={lessonProgress}
-              nextLesson={nextLesson}
-              progressPercent={progressPercent}
+              nextPathLesson={nextPathLesson}
+              pathProgress={pathProgress}
               marketAssets={marketAssets}
               marketStatus={marketStatus}
               lastUpdated={lastUpdated}
-              onStartLesson={() => onOpenLesson(nextLesson)}
+              onStartLesson={nextPathLesson ? () => onOpenLesson(nextPathLesson) : undefined}
             />
           ) : null}
 
           {activeTab === 'learn' ? (
             <LearnTab
-              units={treeUnits}
               lessonProgress={lessonProgress}
+              profile={profile}
               onOpenLesson={onOpenLesson}
+              onChestOpened={onChestOpened}
             />
           ) : null}
 
@@ -251,19 +257,19 @@ export default function DashboardScreen({
 type HomeProps = {
   firstName: string;
   lessonProgress: LessonProgress;
-  nextLesson: Lesson;
-  progressPercent: number;
+  nextPathLesson: Lesson | undefined;
+  pathProgress: { completed: number; total: number };
   marketAssets: MarketAsset[];
   marketStatus: 'loading' | 'ready' | 'fallback';
   lastUpdated: string | null;
-  onStartLesson: () => void;
+  onStartLesson?: () => void;
 };
 
 function HomeTab({
   firstName,
   lessonProgress,
-  nextLesson,
-  progressPercent,
+  nextPathLesson,
+  pathProgress,
   marketAssets,
   marketStatus,
   lastUpdated,
@@ -275,24 +281,36 @@ function HomeTab({
         <Text style={styles.eyebrow}>TODAY</Text>
         <Text style={styles.title}>Keep learning, {firstName}</Text>
         <Text style={styles.body}>
-          One focused course session at a time. Build XP, keep your streak alive, and move through
-          a rigorous 1000+ lesson financial literacy curriculum.
+          Work through bite-sized lessons, build XP, and keep your streak alive on your
+          personal finance learning path.
         </Text>
       </View>
 
-      <View style={styles.featurePanel}>
-        <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>CONTINUE</Text>
-        <Text style={styles.featureTitle}>{nextLesson.title}</Text>
-        <Text style={styles.featureBody}>{nextLesson.steps[0]?.body}</Text>
-        <TouchableOpacity style={styles.yellowButton} activeOpacity={0.86} onPress={onStartLesson}>
-          <Text style={styles.yellowButtonText}>START COURSE LESSON</Text>
-        </TouchableOpacity>
-      </View>
+      {nextPathLesson ? (
+        <View style={styles.featurePanel}>
+          <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>CONTINUE</Text>
+          <Text style={styles.featureTitle}>{nextPathLesson.title}</Text>
+          <Text style={styles.featureBody}>
+            {nextPathLesson.exercises?.length ?? 0} exercises · {nextPathLesson.xp} XP
+          </Text>
+          <TouchableOpacity style={styles.yellowButton} activeOpacity={0.86} onPress={onStartLesson}>
+            <Text style={styles.yellowButtonText}>CONTINUE YOUR PATH</Text>
+          </TouchableOpacity>
+        </View>
+      ) : pathProgress.total > 0 ? (
+        <View style={styles.featurePanel}>
+          <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>ALL CAUGHT UP</Text>
+          <Text style={styles.featureTitle}>Unit complete!</Text>
+          <Text style={styles.featureBody}>
+            You've finished all available lessons. More content coming soon.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.metricRow}>
         <MetricBox label="XP" value={`${lessonProgress.xp}`} />
         <MetricBox label="Streak" value={`${lessonProgress.streak} DAY`} />
-        <MetricBox label="Catalog" value={`${progressPercent}%`} />
+        <MetricBox label="Path" value={`${pathProgress.completed}/${pathProgress.total}`} />
       </View>
 
       <MarketPreview assets={marketAssets.slice(0, 4)} status={marketStatus} lastUpdated={lastUpdated} />
@@ -301,204 +319,271 @@ function HomeTab({
 }
 
 type LearnProps = {
-  units: ReturnType<typeof getUnitsForTree>;
   lessonProgress: LessonProgress;
+  profile: OnboardingProfile;
   onOpenLesson: (lesson: Lesson) => void;
+  onChestOpened?: (chestId: string, reward: { brainBucks: number; xp: number }) => void;
 };
 
-function LearnTab({ units, lessonProgress, onOpenLesson }: LearnProps) {
-  const continueLesson = getLessonById(lessonProgress.activeLessonId)
-    ?? lessonCatalog.find((lesson) => !lessonProgress.completedLessonIds.includes(lesson.id))
-    ?? lessonCatalog[0];
-  const masterySnapshot = getMasterySnapshot(lessonProgress);
-  const topMastery = masterySnapshot
-    .filter((item) => item.percent > 0)
-    .sort((a, b) => b.percent - a.percent)
-    .slice(0, 4);
-  const starterMastery = topMastery.length > 0 ? topMastery : masterySnapshot.slice(0, 4);
-  const reviewLessons = getReviewLessons(lessonProgress).slice(0, 3);
-  const upcomingAssessment = getUpcomingAssessment(lessonProgress);
+function LearnTab({ lessonProgress, profile, onOpenLesson, onChestOpened }: LearnProps) {
+  const pathUnits = getPathUnits(profile);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+
+  if (selectedUnitId) {
+    const unit = pathUnits.find((u) => u.id === selectedUnitId);
+    if (unit) {
+      return (
+        <UnitPathView
+          unit={unit}
+          lessonProgress={lessonProgress}
+          onOpenLesson={onOpenLesson}
+          onChestOpened={onChestOpened}
+          onBack={() => setSelectedUnitId(null)}
+        />
+      );
+    }
+  }
 
   return (
     <View>
       <TabHero
-        eyebrow="COURSE"
-        title="Financial literacy mastery"
-        body={`${lessonCatalog.length} college-style lessons, labs, cases, projects, and exams across the full personal finance curriculum.`}
+        eyebrow="LEARN"
+        title="Your learning path"
+        body="Bite-sized lessons, interactive exercises, and real-world finance skills. Earn XP and Brain Bucks as you go."
       />
+      <LearnHUD
+        streak={lessonProgress.streak}
+        brainBucks={lessonProgress.brainBucks ?? 0}
+      />
+      <View style={styles.gameGrid}>
+        {pathUnits.map((unit, idx) => (
+          <UnitCard
+            key={unit.id}
+            unit={unit}
+            unitIndex={idx + 1}
+            lessonProgress={lessonProgress}
+            onPress={() => setSelectedUnitId(unit.id)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
 
-      {continueLesson ? (
-        <View style={styles.featurePanel}>
-          <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>CONTINUE MODULE</Text>
-          <Text style={styles.featureTitle}>{continueLesson.unitTitle}</Text>
-          <Text style={styles.featureBody}>
-            Next: {continueLesson.title}. This lesson has {continueLesson.steps.length} interactive
-            activities and is worth {continueLesson.xp} XP.
-          </Text>
-          <TouchableOpacity style={styles.yellowButton} activeOpacity={0.86} onPress={() => onOpenLesson(continueLesson)}>
-            <Text style={styles.yellowButtonText}>OPEN COURSE LESSON</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
+// ─── UnitCard (mirrors GameCard exactly) ─────────────────────────────────────
 
-      <View style={styles.progressPanel}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.panelEyebrow}>MASTERY STATE</Text>
-          <Text style={styles.progressValue}>{lessonProgress.xp} XP</Text>
-        </View>
-        <Text style={styles.progressSubtext}>
-          {lessonProgress.completedLessonIds.length} lessons complete. Scores now track concept,
-          application, quiz, project, and confidence by competency.
+type UnitCardProps = {
+  unit: import('../types/learn').PathUnit;
+  unitIndex: number;
+  lessonProgress: LessonProgress;
+  onPress: () => void;
+};
+
+const UNIT_STATE_LABEL: Record<UnitState, string> = {
+  locked: 'LOCKED',
+  available: 'START HERE',
+  inProgress: 'IN PROGRESS',
+  completed: 'COMPLETE',
+};
+
+const UNIT_STATE_TOKEN: Record<UnitState, string> = {
+  locked: 'LOCKED',
+  available: 'OPEN',
+  inProgress: 'CONTINUE',
+  completed: 'REVIEW',
+};
+
+function UnitCard({ unit, unitIndex, lessonProgress, onPress }: UnitCardProps) {
+  const state = getUnitState(unit, lessonProgress);
+  const isLocked = state === 'locked';
+  const isCompleted = state === 'completed';
+  const inProgress = state === 'inProgress';
+
+  const lessonNodes = unit.nodes.filter((n) => n.type === 'lesson' || n.type === 'practice');
+  const completedIds = new Set(lessonProgress.completedLessonIds);
+
+  const cardStyle = [
+    styles.gameCard,
+    isLocked && styles.gameCardLocked,
+    isCompleted && styles.unitCardComplete,
+    !isLocked && !inProgress && !isCompleted && styles.unitCardAvailable,
+  ];
+
+  const textColor = isCompleted ? colors.white : colors.buttonText;
+
+  return (
+    <TouchableOpacity
+      style={cardStyle}
+      activeOpacity={isLocked ? 1 : 0.84}
+      onPress={isLocked ? undefined : onPress}
+      disabled={isLocked}
+    >
+      <View style={styles.gameCardHeader}>
+        <Text style={[styles.gameLabel, { color: textColor }]}>
+          {UNIT_STATE_LABEL[state]}
         </Text>
-        <View style={styles.masteryGrid}>
-          {starterMastery.map((item) => (
-            <View key={item.competency.id} style={styles.masteryCard}>
-              <Text style={styles.masteryPercent}>{item.percent}%</Text>
-              <Text style={styles.masteryName}>{item.competency.title}</Text>
-              <View style={styles.trackProgressTrack}>
-                <View style={[styles.trackProgressFill, { width: `${item.percent}%` }]} />
-              </View>
-            </View>
-          ))}
-        </View>
+        <Text style={[styles.gameToken, { color: textColor }]}>
+          {UNIT_STATE_TOKEN[state]}
+        </Text>
       </View>
 
-      <View style={styles.courseSectionHeader}>
-        <Text style={styles.sectionTitle}>Course map</Text>
-        <Text style={styles.sectionMeta}>{courseTracks.length} tracks</Text>
-      </View>
-      <View style={styles.trackGrid}>
-        {courseTracks.map((track) => {
-          const trackUnits = units.filter((unit) => unit.domain === track.id);
-          const lessonIds = trackUnits.flatMap((unit) => unit.lessonIds);
-          const completed = lessonIds.filter((lessonId) => lessonProgress.completedLessonIds.includes(lessonId)).length;
-          const percent = lessonIds.length > 0 ? Math.round((completed / lessonIds.length) * 100) : 0;
+      <View style={styles.masteryRow}>
+        {lessonNodes.map((node) => {
+          const done = node.lessonId ? completedIds.has(node.lessonId) : false;
           return (
-            <View key={track.id} style={styles.trackCard}>
-              <View style={styles.trackIcon}>
-                <Text style={styles.trackIconText}>{track.icon}</Text>
-              </View>
-              <View style={styles.trackCopy}>
-                <Text style={styles.trackTitle}>{track.title}</Text>
-                <Text style={styles.trackBody}>{track.description}</Text>
-                <View style={styles.trackProgressTrack}>
-                  <View style={[styles.trackProgressFill, { width: `${percent}%` }]} />
-                </View>
-                <Text style={styles.trackMeta}>{completed}/{lessonIds.length} complete</Text>
-              </View>
-            </View>
+            <View
+              key={node.id}
+              style={[
+                styles.masteryRing,
+                { borderColor: textColor },
+                done && { backgroundColor: textColor },
+              ]}
+            />
           );
         })}
       </View>
 
-      <View style={styles.courseSectionHeader}>
-        <Text style={styles.sectionTitle}>Review queue</Text>
-        <Text style={styles.sectionMeta}>{reviewLessons.length} due</Text>
-      </View>
-      <View style={styles.reviewPanel}>
-        {reviewLessons.length > 0 ? reviewLessons.map((lesson) => (
-          <TouchableOpacity
-            key={lesson.id}
-            style={styles.reviewLesson}
-            activeOpacity={0.84}
-            onPress={() => onOpenLesson(lesson)}
-          >
-            <Text style={styles.reviewTitle}>{lesson.title}</Text>
-            <Text style={styles.reviewMeta}>{lesson.unitTitle} / {lesson.durationMinutes} min</Text>
+      <Text style={[styles.gameTitle, { color: textColor }]}>{unit.title}</Text>
+      <Text style={[styles.gameBody, { color: textColor }]}>{unit.subtitle}</Text>
+      <Text style={[styles.gameMeta, { color: textColor }]}>
+        UNIT {unitIndex} / {lessonNodes.length} LESSONS / {unit.trackId.toUpperCase()}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+// ─── UnitPathView (winding path for a single unit) ───────────────────────────
+
+type UnitPathViewProps = {
+  unit: import('../types/learn').PathUnit;
+  lessonProgress: LessonProgress;
+  onOpenLesson: (lesson: Lesson) => void;
+  onChestOpened?: (chestId: string, reward: { brainBucks: number; xp: number }) => void;
+  onBack: () => void;
+};
+
+function UnitPathView({ unit, lessonProgress, onOpenLesson, onChestOpened, onBack }: UnitPathViewProps) {
+  const [chestModal, setChestModal] = useState<{ id: string; brainBucks: number; xp: number } | null>(null);
+  const [gbVisible, setGbVisible] = useState(false);
+  const nodeStates = computeNodeStates(unit, lessonProgress);
+  const masteryTier = getUnitMasteryTier(unit, lessonProgress);
+
+  function handleNodePress(nodeId: string, lessonId?: string, chestReward?: { brainBucks: number; xp: number }) {
+    if (lessonId) {
+      const lesson = getPathLessonById(lessonId);
+      if (lesson) onOpenLesson(lesson);
+      return;
+    }
+    if (chestReward) setChestModal({ id: nodeId, ...chestReward });
+  }
+
+  function handleClaimChest() {
+    if (!chestModal) return;
+    onChestOpened?.(chestModal.id, { brainBucks: chestModal.brainBucks, xp: chestModal.xp });
+    setChestModal(null);
+  }
+
+  const TIER_LABEL: Record<import('../types/learn').MasteryTier, string> = {
+    bronze: 'BRONZE', silver: 'SILVER', gold: 'GOLD', legendary: 'LEGENDARY',
+  };
+
+  return (
+    <View>
+      {/* Dark card header — matches featurePanel style */}
+      <View style={styles.featurePanel}>
+        <View style={styles.unitPathHeaderRow}>
+          <TouchableOpacity onPress={onBack} style={styles.unitPathBack}>
+            <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>← BACK</Text>
           </TouchableOpacity>
-        )) : (
-          <Text style={styles.reviewEmpty}>
-            No spaced review is due yet. Complete a calculator or quiz lesson to fill this queue.
-          </Text>
+          {masteryTier ? (
+            <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>{TIER_LABEL[masteryTier]}</Text>
+          ) : null}
+        </View>
+        <Text style={styles.featureTitle}>{unit.title}</Text>
+        <Text style={styles.featureBody}>{unit.subtitle}</Text>
+        {unit.guidebook.length > 0 && (
+          <TouchableOpacity onPress={() => setGbVisible(true)} style={styles.unitPathGbBtn}>
+            <Text style={styles.yellowButtonText}>{ICON.lines}  GUIDEBOOK</Text>
+          </TouchableOpacity>
         )}
       </View>
 
-      {upcomingAssessment ? (
-        <View style={styles.assessmentPanel}>
-          <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>UPCOMING GATE</Text>
-          <Text style={styles.featureTitle}>{upcomingAssessment.title}</Text>
-          <Text style={styles.featureBody}>
-            Exams and capstones unlock module certificates and count more heavily toward mastery.
-          </Text>
-          <TouchableOpacity style={styles.yellowButton} activeOpacity={0.86} onPress={() => onOpenLesson(upcomingAssessment)}>
-            <Text style={styles.yellowButtonText}>PREVIEW ASSESSMENT</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
+      <View style={styles.pathColumn}>
+        {unit.nodes.map((node, nodeIdx) => {
+          const state = nodeStates[node.id] ?? 'locked';
+          const prevNode = unit.nodes[nodeIdx - 1];
+          const prevState = prevNode ? (nodeStates[prevNode.id] ?? 'locked') : 'completed';
+          const segmentCompleted = prevState === 'completed';
+          const lesson = node.lessonId ? getPathLessonById(node.lessonId) : undefined;
+          const nodeLabel = lesson?.title ?? (node.type === 'chest' ? `+${node.chestReward?.brainBucks ?? 0} BB` : undefined);
 
-      <View style={styles.courseSectionHeader}>
-        <Text style={styles.sectionTitle}>Modules</Text>
-        <Text style={styles.sectionMeta}>{units.length} levels</Text>
-      </View>
-      <View style={styles.unitList}>
-        {units.map((unit) => {
-          const completion = getModuleCompletion(unit, lessonProgress);
-          const lessons = unit.lessonIds
-            .slice(0, 6)
-            .map((lessonId) => getLessonById(lessonId))
-            .filter((lesson): lesson is Lesson => Boolean(lesson));
           return (
-            <View key={unit.id} style={styles.unitCard}>
-              <View style={styles.moduleHeader}>
-                <View style={styles.moduleHeaderCopy}>
-                  <Text style={styles.unitEyebrow}>{unit.level.toUpperCase()}</Text>
-                  <Text style={styles.unitTitle}>{unit.title}</Text>
+            <View key={node.id}>
+              {nodeIdx > 0 && (
+                <View style={[
+                  styles.pathSegmentRow,
+                  node.position === 'left' && styles.pathLeft,
+                  node.position === 'right' && styles.pathRight,
+                ]}>
+                  <PathSegment completed={segmentCompleted} />
                 </View>
-                <Text style={styles.modulePercent}>{completion.percent}%</Text>
-              </View>
-              {unit.description ? <Text style={styles.moduleDescription}>{unit.description}</Text> : null}
-              <View style={styles.trackProgressTrack}>
-                <View style={[styles.trackProgressFill, { width: `${completion.percent}%` }]} />
-              </View>
-              <View style={styles.nodeGrid}>
-                {lessons.map((lesson, index) => {
-                  const isCompleted = lessonProgress.completedLessonIds.includes(lesson.id);
-                  const isLocked = isLessonSoftLocked(lesson, lessonProgress.completedLessonIds);
-                  return (
-                    <TouchableOpacity
-                      key={lesson.id}
-                      style={[
-                        styles.lessonNode,
-                        isCompleted && styles.lessonNodeComplete,
-                        isLocked && styles.lessonNodeLocked,
-                      ]}
-                      activeOpacity={0.84}
-                      onPress={() => onOpenLesson(lesson)}
-                    >
-                      <Text
-                        style={[
-                          styles.lessonNodeNumber,
-                          isCompleted && styles.lessonNodeNumberComplete,
-                        ]}
-                      >
-                        {index + 1}
-                      </Text>
-                      <Text
-                        numberOfLines={2}
-                        style={[
-                          styles.lessonNodeText,
-                          isCompleted && styles.lessonNodeTextComplete,
-                        ]}
-                      >
-                        {isLocked ? 'Preview' : lesson.title}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.lessonNodeMeta,
-                          isCompleted && styles.lessonNodeTextComplete,
-                        ]}
-                      >
-                        {lesson.steps.length} acts / {lesson.xp} XP
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              )}
+              <View style={[
+                styles.pathNodeRow,
+                node.position === 'left' && styles.pathLeft,
+                node.position === 'right' && styles.pathRight,
+              ]}>
+                <PathNodeButton
+                  nodeId={node.id}
+                  type={node.type}
+                  state={state}
+                  label={nodeLabel}
+                  onPress={() => handleNodePress(node.id, node.lessonId, node.chestReward)}
+                />
               </View>
             </View>
           );
         })}
       </View>
+
+      <View style={styles.unitBottomSpacer} />
+
+      {/* Guidebook modal */}
+      <Modal visible={gbVisible} animationType="slide" onRequestClose={() => setGbVisible(false)}>
+        <View style={[styles.featurePanel, { borderRadius: 0, marginTop: 0 }]}>
+          <View style={styles.unitPathHeaderRow}>
+            <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>{ICON.lines}  GUIDEBOOK</Text>
+            <TouchableOpacity onPress={() => setGbVisible(false)}>
+              <Text style={[styles.panelEyebrow, styles.panelEyebrowOnDark]}>✕ CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.featureTitle, { fontSize: 24 }]}>{unit.title}</Text>
+        </View>
+        <ScrollView style={{ flex: 1, backgroundColor: colors.white }} contentContainerStyle={{ padding: 20, gap: 16 }}>
+          {unit.guidebook.map((entry) => (
+            <View key={entry.id} style={styles.gbEntry}>
+              <Text style={styles.gbEntryTitle}>{entry.title}</Text>
+              <Text style={styles.gbEntryBody}>{entry.body}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </Modal>
+
+      {/* Chest reward modal */}
+      <Modal visible={chestModal !== null} transparent animationType="fade" onRequestClose={() => setChestModal(null)}>
+        <View style={styles.chestOverlay}>
+          <View style={styles.chestCard}>
+            <Text style={styles.chestEmoji}>{ICON.box}</Text>
+            <Text style={styles.chestTitle}>Reward Chest!</Text>
+            <Text style={styles.chestBody}>
+              You earned {chestModal?.brainBucks} Brain Bucks and {chestModal?.xp} XP!
+            </Text>
+            <TouchableOpacity style={styles.chestButton} onPress={handleClaimChest}>
+              <Text style={styles.chestButtonText}>CLAIM REWARD</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -817,7 +902,7 @@ function BudgetTab({ profile }: { profile: OnboardingProfile }) {
           <Text style={styles.trackerDate}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</Text>
           {streak > 0 && (
             <View style={styles.streakBadge}>
-              <Text style={styles.streakText}>🔥 {streak} Day Streak</Text>
+              <Text style={styles.streakText}>{ICON.flame} {streak} Day Streak</Text>
             </View>
           )}
         </View>
@@ -2830,5 +2915,117 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.white,
     opacity: 0.6,
+  },
+
+  // ─── Unit card states ─────────────────────────────────────────────────────────
+  unitCardAvailable: {
+    backgroundColor: colors.white,
+  },
+  unitCardComplete: {
+    backgroundColor: colors.positive,
+  },
+  // ─── Unit path header ─────────────────────────────────────────────────────────
+  unitPathHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  unitPathBack: {
+    paddingVertical: 2,
+  },
+  unitPathGbBtn: {
+    marginTop: 14,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.yellow,
+    borderRadius: 22,
+  },
+  // ─── Guidebook entry ─────────────────────────────────────────────────────────
+  gbEntry: {
+    borderWidth: 2,
+    borderColor: colors.black,
+    borderRadius: 8,
+    padding: 16,
+    backgroundColor: colors.white,
+  },
+  gbEntryTitle: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 18,
+    color: colors.black,
+    marginBottom: 8,
+  },
+  gbEntryBody: {
+    fontSize: 14,
+    color: colors.black,
+    lineHeight: 21,
+    fontWeight: '600',
+  },
+  // ─── Path UI styles ──────────────────────────────────────────────────────────
+  pathColumn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  pathNodeRow: {
+    alignSelf: 'center',
+  },
+  pathSegmentRow: {
+    alignSelf: 'center',
+  },
+  pathLeft: {
+    alignSelf: 'flex-start',
+    marginLeft: 60,
+  },
+  pathRight: {
+    alignSelf: 'flex-end',
+    marginRight: 60,
+  },
+  unitBottomSpacer: {
+    height: 24,
+  },
+  chestOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chestCard: {
+    backgroundColor: '#FFFDF4',
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    width: 300,
+    gap: 12,
+  },
+  chestEmoji: {
+    fontSize: 48,
+    color: colors.yellow,
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  chestTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#10241D',
+  },
+  chestBody: {
+    fontSize: 15,
+    color: '#3D4D40',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  chestButton: {
+    marginTop: 8,
+    backgroundColor: '#F5C142',
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  chestButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#10241D',
+    letterSpacing: 1,
   },
 });

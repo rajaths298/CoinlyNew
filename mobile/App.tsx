@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AiHeaderButton from './src/components/AiHeaderButton';
@@ -12,20 +12,24 @@ import StartScreen from './src/screens/StartScreen';
 import { getGameDefinition } from './src/data/gameDefinitions';
 import {
   applyLessonCompletionToProgress,
+  applyQuestCompletionToProgress,
   getLessonById,
   getNextLesson,
-  getNextLessonAfter,
+  updateReviewItemAfterLesson,
 } from './src/data/lessonCatalog';
+import { getPathLessonById } from './src/data/pathCatalog';
 import { createInitialLemonadeSession } from './src/engine/lemonadeEngine';
 import { createInitialPropertySession } from './src/engine/propertyLadderEngine';
 import { askCoinlyAI, getCoinlyAiConnectionHelp, type LearningContext } from './src/services/aiAdvisor';
+import { loadProgress, saveProgress } from './src/services/progressStorage';
 import { buildCoinlyFinancialContext, type CoinlyAppContext } from './src/services/budgetStorage';
 import type { GameId, GameProgress, GameResult, LemonadeSession, PropertySession } from './src/types/game';
-import type { Lesson, LessonProgress } from './src/types/lesson';
+import type { Lesson, LessonPerformance, LessonProgress, RealWorldQuest } from './src/types/lesson';
 import type { OnboardingProfile, QuizAnswers, SignupProfile } from './src/types/onboarding';
 
 type Screen = 'start' | 'onboarding' | 'signup' | 'dashboard' | 'lesson' | 'game';
 type DevSkipTarget = 'dashboard' | 'lesson';
+type DashboardTab = 'home' | 'learn' | 'games' | 'budget' | 'explore';
 
 const initialLessonProgress: LessonProgress = {
   completedLessonIds: [],
@@ -72,7 +76,19 @@ export default function App() {
   const [profile, setProfile] = useState<OnboardingProfile | null>(
     devSkipTarget ? devProfile : null,
   );
-  const [lessonProgress, setLessonProgress] = useState<LessonProgress>(initialLessonProgress);
+  const [lessonProgress, setLessonProgressRaw] = useState<LessonProgress>(initialLessonProgress);
+  const [postLessonTab, setPostLessonTab] = useState<DashboardTab | undefined>();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist to AsyncStorage on every progress change (debounced 500 ms)
+  const setLessonProgress = useCallback((updater: LessonProgress | ((prev: LessonProgress) => LessonProgress)) => {
+    setLessonProgressRaw((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => { void saveProgress(next); }, 500);
+      return next;
+    });
+  }, []);
   const [gameProgress, setGameProgress] = useState<GameProgress>(initialGameProgress);
   const [lemonadeSession, setLemonadeSession] = useState<LemonadeSession>(() => createInitialLemonadeSession());
   const [propertySession, setPropertySession] = useState<PropertySession>(() => createInitialPropertySession());
@@ -85,9 +101,19 @@ export default function App() {
   const routeOpacity = useRef(new Animated.Value(1)).current;
   const routeTranslateY = useRef(new Animated.Value(0)).current;
   const activeLesson = profile
-    ? getLessonById(activeLessonId) ?? (screen === 'lesson' ? getNextLesson(lessonProgress.completedLessonIds, profile) : undefined)
+    ? (activeLessonId ? (getLessonById(activeLessonId) ?? getPathLessonById(activeLessonId)) : undefined) ?? (screen === 'lesson' ? getNextLesson(lessonProgress.completedLessonIds, profile) : undefined)
     : undefined;
   const activeGame = getGameDefinition(activeGameId);
+
+  // Load persisted progress on first mount
+  useEffect(() => {
+    loadProgress().then((saved) => {
+      if (saved.completedLessonIds.length > 0 || saved.xp > 0) {
+        setLessonProgressRaw(saved);
+      }
+    }).catch(() => {/* non-fatal */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     routeOpacity.setValue(0);
@@ -157,23 +183,57 @@ export default function App() {
     setScreen('lesson');
   };
 
-  const handleCompleteAndAdvanceLesson = (lesson: Lesson) => {
-    const completedLessonIds = lessonProgress.completedLessonIds.includes(lesson.id)
-      ? lessonProgress.completedLessonIds
-      : [...lessonProgress.completedLessonIds, lesson.id];
-    const nextLesson = getNextLessonAfter(lesson.id, completedLessonIds, profile ?? undefined);
+  const handleCompleteAndAdvanceLesson = (lesson: Lesson, performance?: LessonPerformance) => {
+    const isMixedPractice = lesson.moduleId === 'mixed-practice';
+    // Path lessons are those authored in pathCatalog (duo-*, u2-*, u3-*, etc.)
+    const isPathLesson = !!getPathLessonById(lesson.id);
 
-    setLessonProgress((current) => applyLessonCompletionToProgress(current, lesson));
-
-    if (nextLesson && !completedLessonIds.includes(nextLesson.id)) {
-      setActiveLessonId(nextLesson.id);
-      setLessonProgress((current) => ({ ...current, activeLessonId: nextLesson.id }));
-      setScreen('lesson');
+    if (isMixedPractice) {
+      // Mixed-practice nodes: update review queue, return to path
+      const wasCorrect = performance
+        ? performance.totalScoredSteps > 0 && performance.firstTryCorrectCount / performance.totalScoredSteps >= 0.6
+        : true;
+      setLessonProgress((current) => {
+        let updated = { ...current, xp: current.xp + lesson.xp };
+        for (const sourceLessonId of (lesson.prerequisites.length === 0 ? [] : lesson.prerequisites)) {
+          updated = updateReviewItemAfterLesson(updated, sourceLessonId, wasCorrect);
+        }
+        return updated;
+      });
+      setActiveLessonId(undefined);
+      setPostLessonTab('learn');
+      setScreen('dashboard');
       return;
     }
 
+    if (isPathLesson) {
+      // Path lessons never chain into the legacy catalog — save and return to path.
+      setLessonProgress((current) => applyLessonCompletionToProgress(current, lesson, performance));
+      setActiveLessonId(undefined);
+      setPostLessonTab('learn');
+      setScreen('dashboard');
+      return;
+    }
+
+    // Legacy catalog lessons — not used in the new path flow; kept for backwards compat
+    setLessonProgress((current) => applyLessonCompletionToProgress(current, lesson, performance));
     setActiveLessonId(undefined);
     setScreen('dashboard');
+  };
+
+  const handleChestOpened = (chestId: string, reward: { brainBucks: number; xp: number }) => {
+    setLessonProgress((current) => ({
+      ...current,
+      xp: current.xp + reward.xp,
+      brainBucks: (current.brainBucks ?? 0) + reward.brainBucks,
+      completedChestIds: [...(current.completedChestIds ?? []), chestId],
+    }));
+  };
+
+  const handleQuestComplete = (quest: RealWorldQuest) => {
+    setLessonProgress((current) =>
+      applyQuestCompletionToProgress(current, quest.id, quest.xpReward, quest.badgeId),
+    );
   };
 
   const handleLaunchGame = (gameId: GameId) => {
@@ -290,12 +350,14 @@ export default function App() {
           gameProgress={gameProgress}
           onOpenLesson={handleOpenLesson}
           onLaunchGame={handleLaunchGame}
+          onChestOpened={handleChestOpened}
+          initialTab={postLessonTab}
         />
       );
     }
 
     if (screen === 'lesson' && profile) {
-      const lesson = getLessonById(activeLessonId)
+      const lesson = (activeLessonId ? (getLessonById(activeLessonId) ?? getPathLessonById(activeLessonId)) : undefined)
         ?? getNextLesson(lessonProgress.completedLessonIds, profile);
       if (lesson) {
         return (
@@ -303,8 +365,10 @@ export default function App() {
             key={lesson.id}
             aiHeaderButton={aiHeaderButton}
             lesson={lesson}
+            currentStreak={lessonProgress.streak}
             onBack={() => setScreen('dashboard')}
             onCompleteAndAdvance={handleCompleteAndAdvanceLesson}
+            onQuestComplete={handleQuestComplete}
           />
         );
       }
