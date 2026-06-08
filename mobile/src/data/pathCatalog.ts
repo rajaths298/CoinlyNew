@@ -8,6 +8,18 @@ import type {
   PathNodeState,
   PathUnit,
 } from '../types/learn';
+import {
+  introToInvestingLessons,
+  introToInvestingUnit,
+  stocksAndMarketLessons,
+  stocksAndMarketUnit,
+  fundsAndEtfsLessons,
+  fundsAndEtfsUnit,
+  riskMarginShortingLessons,
+  riskMarginShortingUnit,
+  cryptoUnitLessons,
+  cryptoUnit,
+} from './investing';
 
 // ─── Unit accent colors (one per track) ──────────────────────────────────────
 
@@ -1851,14 +1863,29 @@ function buildUnit5(): PathUnit {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-const PATH_UNITS: PathUnit[] = [buildUnit1(), buildUnit2(), buildUnit3(), buildUnit4(), buildUnit5()];
+const PATH_UNITS: PathUnit[] = [
+  buildUnit1(), buildUnit2(), buildUnit3(), buildUnit4(), buildUnit5(),
+  introToInvestingUnit,
+  stocksAndMarketUnit,
+  fundsAndEtfsUnit,
+  riskMarginShortingUnit,
+  cryptoUnit,
+];
+
+const ALL_INVESTING_LESSONS: Record<string, Lesson> = {
+  ...introToInvestingLessons,
+  ...stocksAndMarketLessons,
+  ...fundsAndEtfsLessons,
+  ...riskMarginShortingLessons,
+  ...cryptoUnitLessons,
+};
 
 export function getPathUnits(_profile?: OnboardingProfile): PathUnit[] {
   return PATH_UNITS;
 }
 
 export function getPathLessonById(id: string): Lesson | undefined {
-  return duoLessons[id];
+  return duoLessons[id] ?? ALL_INVESTING_LESSONS[id];
 }
 
 export function computeNodeStates(

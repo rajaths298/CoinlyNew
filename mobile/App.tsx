@@ -22,9 +22,11 @@ import { createInitialLemonadeSession } from './src/engine/lemonadeEngine';
 import { createInitialPropertySession } from './src/engine/propertyLadderEngine';
 import { askCoinlyAI, getCoinlyAiConnectionHelp, type LearningContext } from './src/services/aiAdvisor';
 import { loadProgress, saveProgress } from './src/services/progressStorage';
+import { loadPortfolio, savePortfolio, INITIAL_PORTFOLIO } from './src/services/portfolioStorage';
 import { buildCoinlyFinancialContext, type CoinlyAppContext } from './src/services/budgetStorage';
 import type { GameId, GameProgress, GameResult, LemonadeSession, PropertySession } from './src/types/game';
 import type { Lesson, LessonPerformance, LessonProgress, RealWorldQuest } from './src/types/lesson';
+import type { Portfolio } from './src/types/trading';
 import type { OnboardingProfile, QuizAnswers, SignupProfile } from './src/types/onboarding';
 
 type Screen = 'start' | 'onboarding' | 'signup' | 'dashboard' | 'lesson' | 'game';
@@ -78,6 +80,8 @@ export default function App() {
   );
   const [lessonProgress, setLessonProgressRaw] = useState<LessonProgress>(initialLessonProgress);
   const [postLessonTab, setPostLessonTab] = useState<DashboardTab | undefined>();
+  const [portfolio, setPortfolioRaw] = useState<Portfolio>(INITIAL_PORTFOLIO);
+  const portfolioSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist to AsyncStorage on every progress change (debounced 500 ms)
@@ -89,6 +93,14 @@ export default function App() {
       return next;
     });
   }, []);
+  // Portfolio: TradingTab calls this directly with the already-saved portfolio,
+  // so we just update state here. The tab handles its own debounced savePortfolio calls.
+  const setPortfolio = useCallback((p: Portfolio) => {
+    setPortfolioRaw(p);
+    if (portfolioSaveTimerRef.current) clearTimeout(portfolioSaveTimerRef.current);
+    portfolioSaveTimerRef.current = setTimeout(() => { void savePortfolio(p); }, 500);
+  }, []);
+
   const [gameProgress, setGameProgress] = useState<GameProgress>(initialGameProgress);
   const [lemonadeSession, setLemonadeSession] = useState<LemonadeSession>(() => createInitialLemonadeSession());
   const [propertySession, setPropertySession] = useState<PropertySession>(() => createInitialPropertySession());
@@ -111,6 +123,9 @@ export default function App() {
       if (saved.completedLessonIds.length > 0 || saved.xp > 0) {
         setLessonProgressRaw(saved);
       }
+    }).catch(() => {/* non-fatal */});
+    loadPortfolio().then((saved) => {
+      setPortfolioRaw(saved);
     }).catch(() => {/* non-fatal */});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -348,9 +363,11 @@ export default function App() {
           profile={profile}
           lessonProgress={lessonProgress}
           gameProgress={gameProgress}
+          portfolio={portfolio}
           onOpenLesson={handleOpenLesson}
           onLaunchGame={handleLaunchGame}
           onChestOpened={handleChestOpened}
+          onUpdatePortfolio={setPortfolio}
           initialTab={postLessonTab}
         />
       );

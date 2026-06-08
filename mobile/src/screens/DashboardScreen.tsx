@@ -40,6 +40,8 @@ import type { GameDefinition, GameId, GameProgress } from '../types/game';
 import type { Lesson, LessonProgress } from '../types/lesson';
 import type { OnboardingProfile } from '../types/onboarding';
 import BudgetStudio from './BudgetStudio';
+import TradingTab from './trading/TradingTab';
+import { isInvestTabUnlocked, investTabUnlockProgress } from '../services/portfolioEngine';
 
 type DashboardTab = 'home' | 'learn' | 'games' | 'budget' | 'explore';
 
@@ -48,9 +50,11 @@ type Props = {
   profile: OnboardingProfile;
   lessonProgress: LessonProgress;
   gameProgress: GameProgress;
+  portfolio: import('../types/trading').Portfolio;
   onOpenLesson: (lesson: Lesson) => void;
   onLaunchGame: (gameId: GameId) => void;
   onChestOpened?: (chestId: string, reward: { brainBucks: number; xp: number }) => void;
+  onUpdatePortfolio: (p: import('../types/trading').Portfolio) => void;
   initialTab?: DashboardTab;
 };
 
@@ -59,7 +63,7 @@ const tabItems: Array<{ id: DashboardTab; label: string; icon: string }> = [
   { id: 'learn', label: 'Learn', icon: 'L' },
   { id: 'games', label: 'Games', icon: 'G' },
   { id: 'budget', label: 'Budget', icon: 'B' },
-  { id: 'explore', label: 'Explore', icon: 'E' },
+  { id: 'explore', label: 'Invest', icon: 'I' },
 ];
 
 export default function DashboardScreen({
@@ -67,9 +71,11 @@ export default function DashboardScreen({
   profile,
   lessonProgress,
   gameProgress,
+  portfolio,
   onOpenLesson,
   onLaunchGame,
   onChestOpened,
+  onUpdatePortfolio,
   initialTab,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -224,12 +230,18 @@ export default function DashboardScreen({
           </View>
 
           {activeTab === 'explore' ? (
-            <ExploreTab
-              profile={profile}
-              marketAssets={marketAssets}
-              marketStatus={marketStatus}
-              lastUpdated={lastUpdated}
-            />
+            isInvestTabUnlocked(lessonProgress) ? (
+              <TradingTab
+                portfolio={portfolio}
+                onUpdatePortfolio={onUpdatePortfolio}
+                lessonProgress={lessonProgress}
+              />
+            ) : (
+              <InvestLockedScreen
+                lessonProgress={lessonProgress}
+                onGoToLearn={() => setActiveTab('learn')}
+              />
+            )
           ) : null}
         </Animated.View>
       </ScrollView>
@@ -355,17 +367,31 @@ function LearnTab({ lessonProgress, profile, onOpenLesson, onChestOpened }: Lear
         streak={lessonProgress.streak}
         brainBucks={lessonProgress.brainBucks ?? 0}
       />
-      <View style={styles.gameGrid}>
-        {pathUnits.map((unit, idx) => (
-          <UnitCard
-            key={unit.id}
-            unit={unit}
-            unitIndex={idx + 1}
-            lessonProgress={lessonProgress}
-            onPress={() => setSelectedUnitId(unit.id)}
-          />
-        ))}
-      </View>
+      {(['foundations', 'investing'] as const).map((section) => {
+        const sectionUnits = pathUnits.filter((u) =>
+          section === 'foundations'
+            ? u.trackId === 'foundations'
+            : u.trackId !== 'foundations',
+        );
+        if (sectionUnits.length === 0) return null;
+        const label = section === 'foundations' ? 'Foundations' : 'Investing';
+        return (
+          <View key={section}>
+            <Text style={styles.sectionHeader}>{label}</Text>
+            <View style={styles.gameGrid}>
+              {sectionUnits.map((unit) => (
+                <UnitCard
+                  key={unit.id}
+                  unit={unit}
+                  unitIndex={pathUnits.indexOf(unit) + 1}
+                  lessonProgress={lessonProgress}
+                  onPress={() => setSelectedUnitId(unit.id)}
+                />
+              ))}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -593,6 +619,37 @@ type GamesProps = {
   gameProgress: GameProgress;
   onLaunchGame: (game: GameDefinition) => void;
 };
+
+// ─── Invest tab lock screen ───────────────────────────────────────────────────
+
+function InvestLockedScreen({
+  lessonProgress,
+  onGoToLearn,
+}: {
+  lessonProgress: LessonProgress;
+  onGoToLearn: () => void;
+}) {
+  const progress = investTabUnlockProgress(lessonProgress);
+  return (
+    <View style={styles.lockScreen}>
+      <Text style={styles.lockIcon}>🔒</Text>
+      <Text style={styles.lockTitle}>Invest tab locked</Text>
+      <Text style={styles.lockBody}>
+        Complete the{' '}
+        <Text style={styles.lockEmphasis}>Intro to Investing</Text> unit to unlock
+        the Invest tab and start trading with your paper portfolio.
+      </Text>
+      {progress.total > 0 && (
+        <Text style={styles.lockProgress}>
+          {progress.done} / {progress.total} lessons complete
+        </Text>
+      )}
+      <TouchableOpacity style={styles.lockCta} onPress={onGoToLearn} activeOpacity={0.85}>
+        <Text style={styles.lockCtaText}>Go to Learn tab →</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 function GamesTab({ lessonProgress, gameProgress, onLaunchGame }: GamesProps) {
   const completedCount = lessonProgress.completedLessonIds.length;
@@ -1035,155 +1092,7 @@ function BudgetTab({ profile }: { profile: OnboardingProfile }) {
   );
 }
 
-type ExploreProps = {
-  profile: OnboardingProfile;
-  marketAssets: MarketAsset[];
-  marketStatus: 'loading' | 'ready' | 'fallback';
-  lastUpdated: string | null;
-};
-
-function ExploreTab({ profile, marketAssets, marketStatus, lastUpdated }: ExploreProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<MarketAsset | null>(null);
-  const [isFetchingQuote, setIsFetchingQuote] = useState(false);
-  const [news, setNews] = useState<FinanceNewsItem[]>([]);
-  const [isNewsLoading, setIsNewsLoading] = useState(true);
-
-  // Animation value for fade in
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    let isMounted = true;
-    fetchFinanceNews().then((data) => {
-      if (isMounted) {
-        setNews(data);
-        setIsNewsLoading(false);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }).start();
-      }
-    });
-    return () => { isMounted = false; };
-  }, [fadeAnim]);
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setIsSearching(true);
-    setSearchResults([]);
-    setSelectedAsset(null);
-    try {
-      const results = await searchAssetsByQuery(searchQuery);
-      setSearchResults(results);
-    } catch (err) {
-      console.warn('Search failed', err);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSelectResult = async (result: SearchResult) => {
-    setSearchResults([]);
-    setIsFetchingQuote(true);
-    try {
-      const quote = await fetchLiveQuote(result);
-      setSelectedAsset(quote);
-    } catch (err) {
-      console.warn('Quote fetch failed', err);
-    } finally {
-      setIsFetchingQuote(false);
-    }
-  };
-
-  return (
-    <View>
-      <TabHero
-        eyebrow="EXPLORE"
-        title="Live markets"
-        body="Discover real-time stock prices, read the latest finance news, and view your custom watchlist."
-      />
-      
-      <View style={styles.searchPanel}>
-        <Text style={styles.searchEyebrow}>MARKET LOOKUP</Text>
-        <View style={styles.searchBarContainer}>
-          <TextInput
-            style={styles.searchBarInput}
-            placeholder="Enter symbol (e.g., AAPL)..."
-            placeholderTextColor="rgba(0, 0, 0, 0.4)"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
-            autoCapitalize="characters"
-            autoCorrect={false}
-          />
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch} activeOpacity={0.8}>
-            <Text style={styles.searchButtonText}>GO</Text>
-          </TouchableOpacity>
-        </View>
-        {isSearching ? (
-          <ActivityIndicator style={{ marginTop: 16 }} color={colors.black} />
-        ) : searchResults.length > 0 ? (
-          <View style={styles.searchResultsContainer}>
-            {searchResults.map((result, idx) => (
-              <TouchableOpacity
-                key={`${result.id}-${idx}`}
-                style={styles.searchResultItem}
-                activeOpacity={0.7}
-                onPress={() => handleSelectResult(result)}
-              >
-                <View style={styles.searchResultBadge}>
-                  <Text style={styles.searchResultBadgeText}>{result.kind.toUpperCase()}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.searchResultName} numberOfLines={1}>{result.name}</Text>
-                  <Text style={styles.searchResultSymbol}>{result.symbol}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : isFetchingQuote ? (
-          <ActivityIndicator style={{ marginTop: 16 }} color={colors.black} />
-        ) : selectedAsset ? (
-          <View style={styles.searchResultCard}>
-            <MarketRow asset={selectedAsset} />
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.newsPanel}>
-        <View style={styles.marketHeader}>
-          <Text style={styles.panelEyebrow}>TOP HEADLINES</Text>
-        </View>
-        {isNewsLoading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={colors.black} />
-            <Text style={styles.loadingText}>Fetching latest news...</Text>
-          </View>
-        ) : (
-          <Animated.View style={[styles.newsList, { opacity: fadeAnim }]}>
-            {news.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.newsCard}
-                activeOpacity={0.7}
-                onPress={() => Linking.openURL(item.link)}
-              >
-                <Text style={styles.newsTitle} numberOfLines={3}>{item.title}</Text>
-                <Text style={styles.newsDate}>{item.pubDate}</Text>
-              </TouchableOpacity>
-            ))}
-            {news.length === 0 && <Text style={styles.loadingText}>No news available.</Text>}
-          </Animated.View>
-        )}
-      </View>
-
-      <MarketPreview assets={marketAssets} status={marketStatus} lastUpdated={lastUpdated} expanded />
-    </View>
-  );
-}
+// ExploreTab replaced by TradingTab (see TradingTab.tsx)
 
 type GameLoadingProps = {
   game: GameDefinition;
@@ -1780,6 +1689,57 @@ const styles = StyleSheet.create({
   gameGrid: {
     marginTop: 18,
     gap: 14,
+  },
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    letterSpacing: 1.5,
+    color: '#8A9BB5',
+    textTransform: 'uppercase' as const,
+    marginTop: 28,
+    marginBottom: 2,
+    paddingHorizontal: 2,
+  },
+  lockScreen: {
+    alignItems: 'center' as const,
+    paddingTop: 80,
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  lockIcon: {
+    fontSize: 48,
+  },
+  lockTitle: {
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+    textAlign: 'center' as const,
+  },
+  lockBody: {
+    fontSize: 15,
+    color: '#8A9BB5',
+    textAlign: 'center' as const,
+    lineHeight: 22,
+  },
+  lockEmphasis: {
+    color: '#BE9B4C',
+    fontWeight: '600' as const,
+  },
+  lockProgress: {
+    fontSize: 13,
+    color: '#8A9BB5',
+  },
+  lockCta: {
+    marginTop: 8,
+    backgroundColor: '#BE9B4C',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+  },
+  lockCtaText: {
+    color: '#000000',
+    fontSize: 15,
+    fontWeight: '700' as const,
   },
   zonePanel: {
     marginTop: 18,
