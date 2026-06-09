@@ -126,6 +126,12 @@ export type MatchingPair = {
   match: string;
 };
 
+export type LessonDataPoint = {
+  label: string;
+  value: string;
+  detail?: string;
+};
+
 export type LessonActivity = {
   id: string;
   type: LessonActivityType;
@@ -135,6 +141,8 @@ export type LessonActivity = {
   reveal?: string;
   question?: string;
   explanation?: string;
+  coachNote?: string;
+  dataPoints?: LessonDataPoint[];
   choices?: LessonChoice[];
   actionChoices?: LessonChoice[];
   calculator?: LessonCalculator;
@@ -222,12 +230,37 @@ export type LessonUnit = {
   masteryThreshold?: number;
 };
 
+export type ActivityResponseValue = string | number | string[] | Record<string, number>;
+
 export type ActivityResponse = {
   lessonId: string;
   activityId: string;
-  value: string | number | string[];
+  activityType?: LessonActivityType;
+  value: ActivityResponseValue;
   isCorrect?: boolean;
   score?: number;
+  maxScore?: number;
+  competencyIds?: CompetencyId[];
+  answeredAt?: string;
+};
+
+export type LessonResult = {
+  lessonId: string;
+  startedAt?: string;
+  completedAt: string;
+  score: number;
+  maxScore: number;
+  xpEarned: number;
+  passed: boolean;
+  confidence: number;
+  responses: ActivityResponse[];
+  missedCompetencyIds: CompetencyId[];
+  reviewRequested: boolean;
+};
+
+export type LessonAttempt = LessonResult & {
+  attemptId: string;
+  startedAt: string;
 };
 
 export type RealWorldQuest = {
@@ -288,6 +321,15 @@ export type LessonProgress = {
   xp: number;
   streak: number;
   activeLessonId?: string;
+  activityResponses?: Record<string, ActivityResponse>;
+  lessonAttempts?: LessonAttempt[];
+  lastStudiedAt?: string;
+  dailyGoal?: {
+    date: string;
+    targetLessons: number;
+    completedToday: number;
+  };
+  placementLevel?: LessonLevel;
   mastery?: Partial<Record<CompetencyId, MasteryState>>;
   assessmentResults?: AssessmentResult[];
   reviewQueue?: string[];

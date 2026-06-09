@@ -83,6 +83,234 @@ export type GameProgress = {
   inProgress: Partial<Record<GameId, GameState>>;
 };
 
+export type StockMarketQuoteSource = 'Live' | 'Cached' | 'Demo';
+
+export type StockMarketTradeSide = 'buy' | 'sell';
+
+export type StockMarketAssetKind = 'stock' | 'etf';
+
+export type StockMarketQuote = {
+  symbol: string;
+  label: string;
+  kind: StockMarketAssetKind;
+  price: number;
+  changePercent: number;
+  source: StockMarketQuoteSource;
+  provider: string;
+  isFallback: boolean;
+  fetchedAt: string;
+};
+
+export type StockMarketPosition = {
+  symbol: string;
+  label: string;
+  kind: StockMarketAssetKind;
+  shares: number;
+  avgCost: number;
+  lastPrice: number;
+};
+
+export type StockMarketTrade = {
+  id: string;
+  round: number;
+  side: StockMarketTradeSide;
+  symbol: string;
+  label: string;
+  shares: number;
+  price: number;
+  total: number;
+  source: StockMarketQuoteSource;
+  timestamp: string;
+};
+
+export type StockMarketSnapshot = {
+  id: string;
+  timestamp: string;
+  label: string;
+  value: number;
+  cash: number;
+  investedValue: number;
+  returnPercent: number;
+  source: StockMarketQuoteSource;
+};
+
+export type StockMarketRivalStrategy = 'index' | 'momentum' | 'tech' | 'conservative';
+
+export type StockMarketRival = {
+  id: string;
+  name: string;
+  strategy: StockMarketRivalStrategy;
+  cash: number;
+  holdings: StockMarketPosition[];
+  netWorth: number;
+  returnPercent: number;
+  lastMove: string;
+};
+
+export type StockMarketSessionStatus = 'playing' | 'finished';
+
+export type StockMarketSession = {
+  status: StockMarketSessionStatus;
+  round: number;
+  maxRounds: number;
+  startingCash: number;
+  cash: number;
+  realizedProfit: number;
+  holdings: StockMarketPosition[];
+  quotes: StockMarketQuote[];
+  selectedSymbol: string;
+  trades: StockMarketTrade[];
+  snapshots: StockMarketSnapshot[];
+  rivals: StockMarketRival[];
+  lastMessage: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt?: string;
+};
+
+export type StartupArchetypeId = 'saas' | 'local-service' | 'product-brand';
+
+export type StartupStage = 'idea' | 'mvp' | 'traction' | 'profitability';
+
+export type StartupPhase = 'setup' | 'dashboard' | 'decision' | 'funding' | 'ledger' | 'result';
+
+export type StartupSessionStatus = 'playing' | 'won' | 'lost';
+
+export type StartupActionId =
+  | 'build-product'
+  | 'customer-discovery'
+  | 'adjust-pricing'
+  | 'launch-marketing'
+  | 'hire-teammate'
+  | 'cut-costs'
+  | 'improve-operations';
+
+export type StartupFundingId = 'bootstrap' | 'vc-round' | 'debt';
+
+export type StartupHireId = 'engineer' | 'operator' | 'sales';
+
+export type StartupLogoShape = 'badge' | 'spark' | 'orbit' | 'stack';
+
+export type StartupLogoPalette = 'sunrise' | 'mint' | 'ocean' | 'ink';
+
+export type StartupLogo = {
+  shape: StartupLogoShape;
+  palette: StartupLogoPalette;
+  wordmark: string;
+};
+
+export type StartupCustomerMood = 'delighted' | 'satisfied' | 'frustrated' | 'at-risk';
+
+export type StartupReviewIssue = 'retention' | 'pricing' | 'support' | 'quality' | 'delivery';
+
+export type StartupEventId =
+  | 'platform-shift'
+  | 'enterprise-lead'
+  | 'supplier-spike'
+  | 'competitor-launch'
+  | 'viral-thread'
+  | 'founder-fatigue'
+  | 'payment-delay'
+  | 'retention-signal';
+
+export type StartupMilestoneId =
+  | 'mvp-shipped'
+  | 'first-paying-customers'
+  | 'unit-economics-positive'
+  | 'profit-streak'
+  | 'runway-secured';
+
+export type StartupTeam = Record<StartupHireId, number>;
+
+export type StartupMilestone = {
+  id: StartupMilestoneId;
+  title: string;
+  achieved: boolean;
+};
+
+export type StartupReview = {
+  id: string;
+  month: number;
+  customerName: string;
+  segment: string;
+  stars: number;
+  mood: StartupCustomerMood;
+  issue: StartupReviewIssue;
+  comment: string;
+  resolved: boolean;
+};
+
+export type StartupTurnLedger = {
+  id: string;
+  month: number;
+  title: string;
+  eventTitle: string;
+  actionTitle: string;
+  fundingTitle: string;
+  revenue: number;
+  costs: number;
+  netProfit: number;
+  cashAfter: number;
+  runwayMonths: number;
+  customersAfter: number;
+  churnAfter: number;
+  cacAfter: number;
+  moraleAfter: number;
+  ownershipAfter: number;
+  debtAfter: number;
+  valuationAfter: number;
+  riskAfter: number;
+  lesson: string;
+  whyItMatters: string;
+  statusAfter: StartupSessionStatus;
+};
+
+export type StartupSession = {
+  companyName: string;
+  archetypeId?: StartupArchetypeId;
+  stage: StartupStage;
+  phase: StartupPhase;
+  status: StartupSessionStatus;
+  month: number;
+  maxMonths: number;
+  cash: number;
+  revenue: number;
+  monthlyCosts: number;
+  runwayMonths: number;
+  productQuality: number;
+  customerCount: number;
+  price: number;
+  cac: number;
+  churn: number;
+  retention: number;
+  brand: number;
+  customerSatisfaction: number;
+  team: StartupTeam;
+  morale: number;
+  ownership: number;
+  debt: number;
+  valuation: number;
+  risk: number;
+  profitableStreak: number;
+  fundingRounds: number;
+  pendingSpend: number;
+  pendingFunding: number;
+  actionTakenThisMonth: boolean;
+  fundingTakenThisMonth: boolean;
+  totalRevenue: number;
+  totalCosts: number;
+  startingOwnership: number;
+  logo: StartupLogo;
+  reviews: StartupReview[];
+  milestones: StartupMilestone[];
+  ledger: StartupTurnLedger[];
+  activeEventId?: StartupEventId;
+  activeDecisionId?: StartupActionId;
+  activeFundingId?: StartupFundingId;
+  lastLedger?: StartupTurnLedger;
+  message?: string;
+};
+
 export type PropertyPhase = 'board' | 'deal' | 'choice' | 'upgrade' | 'ledger' | 'result';
 
 export type PropertySessionStatus = 'playing' | 'won' | 'lost';

@@ -1,0 +1,34 @@
+[1G[0K⠙[1G[0K[90menv: load .env[39m
+[90menv: export EXPO_PUBLIC_GEMINI_API_KEY[39m
+[90mStarting project at /Users/rajathshivakumar/Desktop/Coinly APP/mobile[39m
+[2mStarting Metro Bundler[22m
+
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+█ ▄▄▄▄▄ █▀▀ ███▀ ▄█ ▄▄▄▄▄ █
+█ █   █ █▄▀██▀█▄▀ █ █   █ █
+█ █▄▄▄█ █ ▄ █ ▄▀ ██ █▄▄▄█ █
+█▄▄▄▄▄▄▄█ █ ▀▄█ █▄█▄▄▄▄▄▄▄█
+█ ▄█ ▀▀▄ █▀█  ▄▀▄▄▀  ▄▀▄▄▀█
+█▄█ ▄▀▄▄██▀▀  ▀ ▀▄▄▀ ▀▀█▄▄█
+███▀ ▀▀▄▄ ▀▄ █  █▀█ ▄█ ██▀█
+█▄▀▀ █ ▄█▀█  █▀██ ▄▄ ▀▀██▄█
+█▄▄█▄▄█▄▄ ▄▀█ ▀▄  ▄▄▄ █ ▄ █
+█ ▄▄▄▄▄ █▄▀▀▄ █▄  █▄█  ▀ ▄█
+█ █   █ █▀▄ ▀▄▄▀▀▄ ▄▄ █▀▄██
+█ █▄▄▄█ █▀▄ ▀▄  █  █▄  ▄█▄█
+█▄▄▄▄▄▄▄█▄█▄██▄▄█▄███▄▄█▄▄█
+
+[2m› Scan the QR code above to open in [1mExpo Go[22m[2m.[22m
+› Metro: [4mexp://192.168.1.153:8082[24m
+› Web: [4mhttp://localhost:8082[24m
+
+› Using [36mExpo Go[39m [2m(Press [22m[2m[1ms[22m[22m[2m to switch to development build)[22m
+› Press [1m?[22m [2m│[22m show all commands
+
+Logs for your project will appear below.[2m Press Ctrl+C to exit.[22m
+[1miOS[22m [0m[2m./[22m[0m[1mindex.ts[22m [47m[37m░░░░░░░░░░░░░░░░[39m[49m[1m  0.0% [22m[2m(0/1)[22m
+[80D[1A[0J[1miOS[22m [0m[2m./[22m[0m[1mindex.ts[22m [32m[42m▓▓[49m[39m[47m[37m░░░░░░░░░░░░░░[39m[49m[1m 14.5% [22m[2m( 80/210)[22m
+[80D[1A[0J[1miOS[22m [0m[2m./[22m[0m[1mindex.ts[22m [32m[42m▓▓▓▓▓▓▓▓[49m[39m[47m[37m░░░░░░░░[39m[49m[1m 50.3% [22m[2m(342/482)[22m
+[80D[1A[0J[1miOS[22m [0m[2m./[22m[0m[1mindex.ts[22m [32m[42m▓▓▓▓▓▓▓▓▓▓▓▓▓[49m[39m[47m[37m░░░[39m[49m[1m 84.7% [22m[2m(544/591)[22m
+[80D[1A[0J[32m[1miOS[22m Bundled [39m[2m403ms[22m[0m[2m index.ts (591 modules)[22m[0m
+[32m[1miOS[22m Bundled [39m[2m33ms[22m[0m[2m index.ts (1 module)[22m[0m

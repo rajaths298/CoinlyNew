@@ -19,6 +19,9 @@ export type LearningContext = {
   active_lesson_title?: string;
   active_game_title?: string;
   mastery?: Record<string, unknown>;
+  review_queue_count?: number;
+  last_studied_at?: string;
+  recent_lesson_attempts?: Array<Record<string, unknown>>;
   recent_game_results?: Array<Record<string, unknown>>;
 };
 
@@ -34,35 +37,44 @@ export async function askCoinlyAI(
   learningCtx?: LearningContext,
   userProfile?: Record<string, unknown>,
 ): Promise<string> {
-  const body = {
-    message: userMessage,
-    history: history.map(msg => ({
+  const ollamaUrl = 'http://localhost:11434/api/chat';
+
+  const systemMessage = `You are Coinly AI, a friendly and extremely smart financial assistant. Keep responses concise, engaging, and mobile-friendly. You help users manage their budget, analyze their spending, understand market investments, and learn financial concepts. Provide actionable, supportive advice.
+
+=== CURRENT USER CONTEXT ===
+Financial Context: ${JSON.stringify(ctx)}
+Learning Context: ${JSON.stringify(learningCtx || {})}
+User Profile: ${JSON.stringify(userProfile || {})}
+========================`;
+
+  const messages = [
+    { role: 'system', content: systemMessage },
+    ...history.map(msg => ({
       role: msg.role === 'assistant' ? 'assistant' : 'user',
       content: msg.content,
     })),
-    financial_context: ctx,
-    learning_context: learningCtx ?? null,
-    user_profile: userProfile ?? null,
-  };
+    { role: 'user', content: userMessage }
+  ];
 
   try {
-    // Note: If running on a physical device, replace localhost with your Mac's local IP address.
-    const response = await fetch('http://localhost:8000/chat', {
+    const response = await fetch(ollamaUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        model: 'llama3.1:8b',
+        messages: messages,
+        stream: false,
+      }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Coinly AI API error:', errorText);
-      throw new Error(`Agent returned ${response.status}: ${response.statusText}`);
+       throw new Error(`Ollama returned ${response.status}: ${await response.text()}`);
     }
 
     const data = await response.json();
-    return data.reply;
+    return data.message.content;
   } catch (error) {
-    console.error('Error in askCoinlyAI:', error);
+    console.error('Error connecting to local Ollama AI:', error);
     throw error;
   }
 }
@@ -70,6 +82,6 @@ export async function askCoinlyAI(
 export function getCoinlyAiConnectionHelp(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.length > 0
-    ? `Coinly AI couldn't connect: ${message}`
-    : 'Coinly AI hit a hiccup. Make sure the backend is running and try again.';
+    ? `Local AI couldn't connect: ${message}. Make sure Ollama is running!`
+    : 'Local AI hit a hiccup. Make sure Ollama is running on your Mac.';
 }

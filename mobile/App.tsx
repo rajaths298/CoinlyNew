@@ -20,11 +20,22 @@ import {
 import { getPathLessonById } from './src/data/pathCatalog';
 import { createInitialLemonadeSession } from './src/engine/lemonadeEngine';
 import { createInitialPropertySession } from './src/engine/propertyLadderEngine';
+import { createInitialStartupSession } from './src/engine/startupStoryEngine';
+import { createInitialStockMarketSession } from './src/engine/stockMarketEngine';
 import { askCoinlyAI, getCoinlyAiConnectionHelp, type LearningContext } from './src/services/aiAdvisor';
 import { loadProgress, saveProgress } from './src/services/progressStorage';
 import { loadPortfolio, savePortfolio, INITIAL_PORTFOLIO } from './src/services/portfolioStorage';
 import { buildCoinlyFinancialContext, type CoinlyAppContext } from './src/services/budgetStorage';
-import type { GameId, GameProgress, GameResult, LemonadeSession, PropertySession } from './src/types/game';
+import { loadStockMarketSession, resetStockMarketSession, saveStockMarketSession } from './src/services/stockMarketStorage';
+import type {
+  GameId,
+  GameProgress,
+  GameResult,
+  LemonadeSession,
+  PropertySession,
+  StartupSession,
+  StockMarketSession,
+} from './src/types/game';
 import type { Lesson, LessonPerformance, LessonProgress, RealWorldQuest } from './src/types/lesson';
 import type { Portfolio } from './src/types/trading';
 import type { OnboardingProfile, QuizAnswers, SignupProfile } from './src/types/onboarding';
@@ -37,6 +48,10 @@ const initialLessonProgress: LessonProgress = {
   completedLessonIds: [],
   xp: 0,
   streak: 0,
+  brainBucks: 0,
+  dailyXpGoal: 20,
+  dailyXpEarned: 0,
+  schemaVersion: 2,
 };
 
 const initialGameProgress: GameProgress = {
@@ -104,12 +119,15 @@ export default function App() {
   const [gameProgress, setGameProgress] = useState<GameProgress>(initialGameProgress);
   const [lemonadeSession, setLemonadeSession] = useState<LemonadeSession>(() => createInitialLemonadeSession());
   const [propertySession, setPropertySession] = useState<PropertySession>(() => createInitialPropertySession());
+  const [startupSession, setStartupSession] = useState<StartupSession>(() => createInitialStartupSession());
+  const [stockMarketSession, setStockMarketSession] = useState<StockMarketSession>(() => createInitialStockMarketSession());
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>();
   const [activeGameId, setActiveGameId] = useState<GameId | undefined>();
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [aiMessages, setAiMessages] = useState<AiChatMessage[]>(initialAiMessages);
   const [aiInput, setAiInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
+  const stockMarketSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeOpacity = useRef(new Animated.Value(1)).current;
   const routeTranslateY = useRef(new Animated.Value(0)).current;
   const activeLesson = profile
@@ -127,6 +145,15 @@ export default function App() {
     loadPortfolio().then((saved) => {
       setPortfolioRaw(saved);
     }).catch(() => {/* non-fatal */});
+    loadStockMarketSession()
+      .then(setStockMarketSession)
+      .catch(() => undefined);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (portfolioSaveTimerRef.current) clearTimeout(portfolioSaveTimerRef.current);
+      if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -153,6 +180,14 @@ export default function App() {
     setScreen('onboarding');
   };
 
+  const handleUpdateStockMarketSession = useCallback((session: StockMarketSession) => {
+    setStockMarketSession(session);
+    if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
+    stockMarketSaveTimerRef.current = setTimeout(() => {
+      void saveStockMarketSession(session);
+    }, 300);
+  }, []);
+
   const handleDevSkip = (target: DevSkipTarget) => {
     setQuizAnswers(devProfile.answers);
     setProfile(devProfile);
@@ -160,6 +195,10 @@ export default function App() {
     setGameProgress(initialGameProgress);
     setLemonadeSession(createInitialLemonadeSession());
     setPropertySession(createInitialPropertySession());
+    setStartupSession(createInitialStartupSession());
+    void saveProgress(initialLessonProgress);
+    if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
+    void resetStockMarketSession().then(setStockMarketSession);
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen(target);
@@ -187,6 +226,10 @@ export default function App() {
     setGameProgress(initialGameProgress);
     setLemonadeSession(createInitialLemonadeSession());
     setPropertySession(createInitialPropertySession());
+    setStartupSession(createInitialStartupSession());
+    void saveProgress(initialLessonProgress);
+    if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
+    void resetStockMarketSession().then(setStockMarketSession);
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen('start');
@@ -302,6 +345,16 @@ export default function App() {
         active_lesson_title: activeLesson?.title,
         active_game_title: activeGame?.title,
         mastery: lessonProgress.mastery as Record<string, unknown> | undefined,
+        review_queue_count: lessonProgress.reviewQueue?.length ?? 0,
+        last_studied_at: lessonProgress.lastStudiedAt,
+        recent_lesson_attempts: lessonProgress.lessonAttempts?.slice(-3).map((attempt) => ({
+          lessonId: attempt.lessonId,
+          score: attempt.score,
+          maxScore: attempt.maxScore,
+          passed: attempt.passed,
+          confidence: attempt.confidence,
+          missedCompetencyIds: attempt.missedCompetencyIds,
+        })),
         recent_game_results: gameProgress.results.slice(-5).map((r) => ({
           gameId: r.gameId,
           competency: r.competency,
@@ -400,10 +453,14 @@ export default function App() {
             game={game}
             lemonadeSession={lemonadeSession}
             propertySession={propertySession}
+            startupSession={startupSession}
+            stockMarketSession={stockMarketSession}
             onBack={() => setScreen('dashboard')}
             onComplete={handleCompleteGame}
             onUpdateLemonadeSession={setLemonadeSession}
             onUpdatePropertySession={setPropertySession}
+            onUpdateStartupSession={setStartupSession}
+            onUpdateStockMarketSession={handleUpdateStockMarketSession}
           />
         );
       }

@@ -53,6 +53,8 @@ import {
 } from '../engine/lemonadeEngine';
 import LemonadeShop3D from './LemonadeShop3D';
 import PropertyLadderScreen from './PropertyLadderScreen';
+import StartupStoryScreen from './StartupStoryScreen';
+import StockMarketGameScreen from './StockMarketGameScreen';
 import { appColors as colors } from '../theme';
 import type {
   CustomerDialogue,
@@ -70,7 +72,9 @@ import type {
   LemonadeUpgradeId,
   PropertySession,
   ShopExpansionId,
+  StockMarketSession,
   StationId,
+  StartupSession,
   WorkerRole,
 } from '../types/game';
 
@@ -79,10 +83,14 @@ type Props = {
   game: GameDefinition;
   lemonadeSession?: LemonadeSession;
   propertySession?: PropertySession;
+  startupSession?: StartupSession;
+  stockMarketSession?: StockMarketSession;
   onBack: () => void;
   onComplete: (result: GameResult) => void;
   onUpdateLemonadeSession?: (session: LemonadeSession) => void;
   onUpdatePropertySession?: (session: PropertySession) => void;
+  onUpdateStartupSession?: (session: StartupSession) => void;
+  onUpdateStockMarketSession?: (session: StockMarketSession) => void;
 };
 
 type RoundMetrics = {
@@ -106,6 +114,8 @@ const emptyMetrics: RoundMetrics = {
 export default function GameScreen(props: Props) {
   if (props.game.id === 'lemonade-empire') return <LemonadeEmpireScreen {...props} />;
   if (props.game.id === 'property-ladder') return <PropertyLadderScreen {...props} />;
+  if (props.game.id === 'startup-story') return <StartupStoryScreen {...props} />;
+  if (props.game.id === 'first-place') return <StockMarketGameScreen {...props} />;
   return <FallbackGameScreen {...props} />;
 }
 
