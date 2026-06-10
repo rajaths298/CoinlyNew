@@ -839,7 +839,7 @@ function BudgetTab({ profile }: { profile: OnboardingProfile }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([{
     id: '0', sender: 'ai',
-    text: "Hey! I'm Coinly AI. I can use your local spending, portfolio, and goals to coach your next move, or answer any general questions you have."
+    text: "Hey Its coinly. I can use your local spending, portfolio, and goals to coach your next move, or answer any general questions you have."
   }]);
   const [chatInput, setChatInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);

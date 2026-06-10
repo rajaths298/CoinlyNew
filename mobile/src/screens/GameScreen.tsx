@@ -54,7 +54,10 @@ import {
 import LemonadeShop3D from './LemonadeShop3D';
 import PropertyLadderScreen from './PropertyLadderScreen';
 import StartupStoryScreen from './StartupStoryScreen';
+<<<<<<< Updated upstream
 import StockMarketGameScreen from './StockMarketGameScreen';
+=======
+>>>>>>> Stashed changes
 import { appColors as colors } from '../theme';
 import type {
   CustomerDialogue,
@@ -84,13 +87,19 @@ type Props = {
   lemonadeSession?: LemonadeSession;
   propertySession?: PropertySession;
   startupSession?: StartupSession;
+<<<<<<< Updated upstream
   stockMarketSession?: StockMarketSession;
+=======
+>>>>>>> Stashed changes
   onBack: () => void;
   onComplete: (result: GameResult) => void;
   onUpdateLemonadeSession?: (session: LemonadeSession) => void;
   onUpdatePropertySession?: (session: PropertySession) => void;
   onUpdateStartupSession?: (session: StartupSession) => void;
+<<<<<<< Updated upstream
   onUpdateStockMarketSession?: (session: StockMarketSession) => void;
+=======
+>>>>>>> Stashed changes
 };
 
 type RoundMetrics = {
@@ -115,7 +124,10 @@ export default function GameScreen(props: Props) {
   if (props.game.id === 'lemonade-empire') return <LemonadeEmpireScreen {...props} />;
   if (props.game.id === 'property-ladder') return <PropertyLadderScreen {...props} />;
   if (props.game.id === 'startup-story') return <StartupStoryScreen {...props} />;
+<<<<<<< Updated upstream
   if (props.game.id === 'first-place') return <StockMarketGameScreen {...props} />;
+=======
+>>>>>>> Stashed changes
   return <FallbackGameScreen {...props} />;
 }
 

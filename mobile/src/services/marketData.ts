@@ -27,16 +27,55 @@ type WatchAsset = {
   symbol: string;
   kind: MarketAssetKind;
   coinGeckoId?: string;
-  stooqSymbol?: string;
+  yahooSymbol?: string;
   fallbackPrice: number;
   fallbackChangePercent: number;
 };
 
 export const defaultWatchlist: WatchAsset[] = [
+<<<<<<< Updated upstream
   { id: 'spy',      label: 'S&P 500 ETF',  symbol: 'SPY',  kind: 'etf',    stooqSymbol: 'spy.us',  fallbackPrice: 621.84,  fallbackChangePercent: 0.24  },
   { id: 'aapl',     label: 'Apple',         symbol: 'AAPL', kind: 'stock',  stooqSymbol: 'aapl.us', fallbackPrice: 196.58,  fallbackChangePercent: -0.18 },
   { id: 'bitcoin',  label: 'Bitcoin',       symbol: 'BTC',  kind: 'crypto', coinGeckoId: 'bitcoin', fallbackPrice: 108420,  fallbackChangePercent: 1.35  },
   { id: 'ethereum', label: 'Ethereum',      symbol: 'ETH',  kind: 'crypto', coinGeckoId: 'ethereum',fallbackPrice: 3865,    fallbackChangePercent: 0.72  },
+=======
+  {
+    id: 'spy',
+    label: 'S&P 500 ETF',
+    symbol: 'SPY',
+    kind: 'etf',
+    yahooSymbol: 'SPY',
+    fallbackPrice: 621.84,
+    fallbackChangePercent: 0.24,
+  },
+  {
+    id: 'aapl',
+    label: 'Apple',
+    symbol: 'AAPL',
+    kind: 'stock',
+    yahooSymbol: 'AAPL',
+    fallbackPrice: 196.58,
+    fallbackChangePercent: -0.18,
+  },
+  {
+    id: 'bitcoin',
+    label: 'Bitcoin',
+    symbol: 'BTC',
+    kind: 'crypto',
+    coinGeckoId: 'bitcoin',
+    fallbackPrice: 108420,
+    fallbackChangePercent: 1.35,
+  },
+  {
+    id: 'ethereum',
+    label: 'Ethereum',
+    symbol: 'ETH',
+    kind: 'crypto',
+    coinGeckoId: 'ethereum',
+    fallbackPrice: 3865,
+    fallbackChangePercent: 0.72,
+  },
+>>>>>>> Stashed changes
 ];
 
 // ─── Current quotes ───────────────────────────────────────────────────────────
@@ -47,8 +86,18 @@ export async function fetchMarketAssets(assets = defaultWatchlist): Promise<Mark
 
 async function fetchAsset(asset: WatchAsset): Promise<MarketAsset> {
   try {
+<<<<<<< Updated upstream
     if (asset.kind === 'crypto' && asset.coinGeckoId) return await fetchCryptoAsset(asset);
     if (asset.stooqSymbol) return await fetchStooqAsset(asset);
+=======
+    if (asset.kind === 'crypto' && asset.coinGeckoId) {
+      return await fetchCryptoAsset(asset);
+    }
+
+    if (asset.yahooSymbol) {
+      return await fetchYahooAsset(asset, asset.yahooSymbol);
+    }
+>>>>>>> Stashed changes
   } catch {
     return fallbackAsset(asset);
   }
@@ -86,16 +135,22 @@ async function fetchCryptoAsset(asset: WatchAsset): Promise<MarketAsset> {
   };
 }
 
+<<<<<<< Updated upstream
 async function fetchStooqAsset(asset: WatchAsset): Promise<MarketAsset> {
   // Format: symbol, date, time, open, high, low, close, volume
   const url = `https://stooq.com/q/l/?s=${asset.stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
+=======
+async function fetchYahooAsset(asset: WatchAsset, yahooSymbol: string): Promise<MarketAsset> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`;
+>>>>>>> Stashed changes
   const response = await fetch(url);
-  if (!response.ok) throw new Error('Stooq request failed');
+  if (!response.ok) throw new Error('Yahoo request failed');
 
-  const csv = await response.text();
-  const rows = csv.trim().split(/\r?\n/);
-  if (rows.length < 2) throw new Error('Stooq CSV missing rows');
+  const data = await response.json();
+  const meta = data?.chart?.result?.[0]?.meta;
+  if (!meta) throw new Error('Yahoo data missing');
 
+<<<<<<< Updated upstream
   const values = rows[1]!.split(',');
   const open = Number(values[3]);
   const high = Number(values[4]);
@@ -106,6 +161,15 @@ async function fetchStooqAsset(asset: WatchAsset): Promise<MarketAsset> {
 
   const changePercent = Number.isFinite(open) && open > 0 ? ((price - open) / open) * 100 : undefined;
   const change = Number.isFinite(open) && open > 0 ? price - open : undefined;
+=======
+  const price = meta.regularMarketPrice;
+  const previousClose = meta.chartPreviousClose || meta.previousClose;
+  const changePercent = (price && previousClose && previousClose > 0)
+    ? ((price - previousClose) / previousClose) * 100
+    : undefined;
+
+  if (!Number.isFinite(price)) throw new Error('Yahoo price missing');
+>>>>>>> Stashed changes
 
   return {
     id: asset.id,
@@ -115,11 +179,15 @@ async function fetchStooqAsset(asset: WatchAsset): Promise<MarketAsset> {
     price,
     change,
     changePercent,
+<<<<<<< Updated upstream
     open: Number.isFinite(open) ? open : undefined,
     high: Number.isFinite(high) ? high : undefined,
     low: Number.isFinite(low) ? low : undefined,
     volume: Number.isFinite(volume) && volume > 0 ? volume : undefined,
     source: 'Stooq',
+=======
+    source: 'Yahoo',
+>>>>>>> Stashed changes
     isFallback: false,
     fetchedAt: Date.now(),
   };
@@ -294,10 +362,20 @@ export async function searchAssetsByQuery(query: string): Promise<SearchResult[]
       for (const item of (data.quotes ?? []) as Array<Record<string, unknown>>) {
         if (stockResults.length >= 4) break;
         let kind: MarketAssetKind | null = null;
+<<<<<<< Updated upstream
         if (item['quoteType'] === 'EQUITY') kind = 'stock';
         else if (item['quoteType'] === 'ETF') kind = 'etf';
         else if (item['quoteType'] === 'MUTUALFUND') kind = 'etf';
         if (!kind) continue;
+=======
+        if (q.quoteType === 'EQUITY') kind = 'stock';
+        else if (q.quoteType === 'ETF') kind = 'etf';
+        else if (q.quoteType === 'CURRENCY') kind = 'forex';
+        else if (q.quoteType === 'MUTUALFUND') kind = 'etf';
+        else if (q.quoteType === 'INDEX') kind = 'etf';
+        else if (q.quoteType === 'FUTURE') kind = 'forex';
+        else if (q.quoteType === 'CRYPTOCURRENCY') continue; 
+>>>>>>> Stashed changes
 
         const name = String(item['shortname'] ?? item['longname'] ?? item['symbol']);
         const sym  = String(item['symbol']);
@@ -355,11 +433,23 @@ export async function fetchLiveQuote(result: SearchResult): Promise<MarketAsset>
   let stooqSymbol = result.symbol;
   if (!stooqSymbol.includes('.')) stooqSymbol = `${stooqSymbol}.US`;
 
+<<<<<<< Updated upstream
   return fetchStooqAsset({
     id: result.id, label: result.name, symbol: result.symbol, kind: result.kind,
     stooqSymbol: stooqSymbol.toLowerCase(),
     fallbackPrice: 0, fallbackChangePercent: 0,
   });
+=======
+  return await fetchYahooAsset({
+    id: result.id,
+    label: result.name,
+    symbol: result.symbol,
+    kind: result.kind,
+    yahooSymbol: result.id,
+    fallbackPrice: 0,
+    fallbackChangePercent: 0
+  }, result.id);
+>>>>>>> Stashed changes
 }
 
 // ─── News ─────────────────────────────────────────────────────────────────────

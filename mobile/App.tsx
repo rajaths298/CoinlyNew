@@ -23,11 +23,15 @@ import { getDailyTriviaQuestion, getTodayDateStr } from './src/data/dailyTrivia'
 import { createInitialLemonadeSession } from './src/engine/lemonadeEngine';
 import { createInitialPropertySession } from './src/engine/propertyLadderEngine';
 import { createInitialStartupSession } from './src/engine/startupStoryEngine';
+<<<<<<< Updated upstream
 import { createInitialStockMarketSession } from './src/engine/stockMarketEngine';
+=======
+>>>>>>> Stashed changes
 import { askCoinlyAI, getCoinlyAiConnectionHelp, type LearningContext } from './src/services/aiAdvisor';
 import { loadProgress, saveProgress } from './src/services/progressStorage';
 import { loadPortfolio, savePortfolio, INITIAL_PORTFOLIO } from './src/services/portfolioStorage';
 import { buildCoinlyFinancialContext, type CoinlyAppContext } from './src/services/budgetStorage';
+<<<<<<< Updated upstream
 import { loadStockMarketSession, resetStockMarketSession, saveStockMarketSession } from './src/services/stockMarketStorage';
 import type {
   GameId,
@@ -40,6 +44,10 @@ import type {
 } from './src/types/game';
 import type { Lesson, LessonPerformance, LessonProgress, RealWorldQuest } from './src/types/lesson';
 import type { Portfolio } from './src/types/trading';
+=======
+import type { GameId, GameProgress, GameResult, LemonadeSession, PropertySession, StartupSession } from './src/types/game';
+import type { Lesson, LessonProgress } from './src/types/lesson';
+>>>>>>> Stashed changes
 import type { OnboardingProfile, QuizAnswers, SignupProfile } from './src/types/onboarding';
 
 type Screen = 'start' | 'onboarding' | 'signup' | 'dashboard' | 'lesson' | 'game' | 'dailyTrivia';
@@ -122,7 +130,10 @@ export default function App() {
   const [lemonadeSession, setLemonadeSession] = useState<LemonadeSession>(() => createInitialLemonadeSession());
   const [propertySession, setPropertySession] = useState<PropertySession>(() => createInitialPropertySession());
   const [startupSession, setStartupSession] = useState<StartupSession>(() => createInitialStartupSession());
+<<<<<<< Updated upstream
   const [stockMarketSession, setStockMarketSession] = useState<StockMarketSession>(() => createInitialStockMarketSession());
+=======
+>>>>>>> Stashed changes
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>();
   const [activeGameId, setActiveGameId] = useState<GameId | undefined>();
   const [isAiOpen, setIsAiOpen] = useState(false);
@@ -198,9 +209,12 @@ export default function App() {
     setLemonadeSession(createInitialLemonadeSession());
     setPropertySession(createInitialPropertySession());
     setStartupSession(createInitialStartupSession());
+<<<<<<< Updated upstream
     void saveProgress(initialLessonProgress);
     if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
     void resetStockMarketSession().then(setStockMarketSession);
+=======
+>>>>>>> Stashed changes
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen(target);
@@ -229,9 +243,12 @@ export default function App() {
     setLemonadeSession(createInitialLemonadeSession());
     setPropertySession(createInitialPropertySession());
     setStartupSession(createInitialStartupSession());
+<<<<<<< Updated upstream
     void saveProgress(initialLessonProgress);
     if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
     void resetStockMarketSession().then(setStockMarketSession);
+=======
+>>>>>>> Stashed changes
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen('start');
@@ -509,13 +526,19 @@ export default function App() {
             lemonadeSession={lemonadeSession}
             propertySession={propertySession}
             startupSession={startupSession}
+<<<<<<< Updated upstream
             stockMarketSession={stockMarketSession}
+=======
+>>>>>>> Stashed changes
             onBack={() => setScreen('dashboard')}
             onComplete={handleCompleteGame}
             onUpdateLemonadeSession={setLemonadeSession}
             onUpdatePropertySession={setPropertySession}
             onUpdateStartupSession={setStartupSession}
+<<<<<<< Updated upstream
             onUpdateStockMarketSession={handleUpdateStockMarketSession}
+=======
+>>>>>>> Stashed changes
           />
         );
       }

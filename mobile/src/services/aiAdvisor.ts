@@ -38,7 +38,11 @@ export async function askCoinlyAI(
   userProfile?: Record<string, unknown>,
 ): Promise<string> {
   const ollamaUrl = 'http://localhost:11434/api/chat';
+<<<<<<< Updated upstream
 
+=======
+  
+>>>>>>> Stashed changes
   const systemMessage = `You are Coinly AI, a friendly and extremely smart financial assistant. Keep responses concise, engaging, and mobile-friendly. You help users manage their budget, analyze their spending, understand market investments, and learn financial concepts. Provide actionable, supportive advice.
 
 === CURRENT USER CONTEXT ===

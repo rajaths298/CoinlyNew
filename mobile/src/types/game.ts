@@ -83,6 +83,7 @@ export type GameProgress = {
   inProgress: Partial<Record<GameId, GameState>>;
 };
 
+<<<<<<< Updated upstream
 export type StockMarketQuoteSource = 'Live' | 'Cached' | 'Demo';
 
 export type StockMarketTradeSide = 'buy' | 'sell';
@@ -168,6 +169,8 @@ export type StockMarketSession = {
   completedAt?: string;
 };
 
+=======
+>>>>>>> Stashed changes
 export type StartupArchetypeId = 'saas' | 'local-service' | 'product-brand';
 
 export type StartupStage = 'idea' | 'mvp' | 'traction' | 'profitability';

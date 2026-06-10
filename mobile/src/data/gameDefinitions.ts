@@ -83,6 +83,7 @@ export const gameDefinitions: GameDefinition[] = [
       { id: 'operations', title: 'Operations System', description: 'Serve customers more reliably at lower burn.', cost: 3200, effect: 'Lower costs' },
     ],
   },
+<<<<<<< Updated upstream
   {
     id: 'first-place',
     title: 'Stock Market Game',
@@ -103,6 +104,9 @@ export const gameDefinitions: GameDefinition[] = [
     ],
     upgrades: [],
   },
+=======
+  shell('first-place', 'First Place', 'Run your first apartment and adult-life budget.', 'Spending & budgeting + Saving', 'Life Sim'),
+>>>>>>> Stashed changes
   shell('market-mogul', 'Market Mogul', 'Grow a portfolio and watch compounding over time.', 'Investing & growth', 'Investing'),
   shell('food-truck-frenzy', 'Food Truck Frenzy', 'Serve the lunch rush and upgrade your truck.', 'Spending & budgeting + Earning', 'Business'),
   shell('dream-quest', 'Dream Quest', 'Fund big life goals through smart trade-offs.', 'Saving + integrated decisions', 'Life Goals'),
