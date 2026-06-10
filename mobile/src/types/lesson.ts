@@ -346,5 +346,13 @@ export type LessonProgress = {
   unitMastery?: Partial<Record<string, import('./learn').MasteryTier>>;
   completedChestIds?: string[];
   dailyQuestProgress?: import('./learn').DailyQuestProgress;
+  dailyTrivia?: {
+    date: string;           // 'YYYY-MM-DD' — which day this record covers
+    questionKey: string;    // '{lessonId}:{exerciseIdx}'
+    answered: boolean;
+    wasCorrect: boolean;
+    triviaStreak: number;   // consecutive days answered
+    lastTriviaDate?: string;
+  };
   schemaVersion?: number;
 };

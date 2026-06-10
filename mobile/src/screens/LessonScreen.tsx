@@ -24,6 +24,7 @@ import ScenarioView from '../components/exercises/ScenarioView';
 import MiniStoryView from '../components/exercises/MiniStoryView';
 import CalculatorView from '../components/exercises/CalculatorView';
 import RecallPromptView from '../components/exercises/RecallPromptView';
+import SliderPlaygroundView from '../components/exercises/SliderPlaygroundView';
 import Confetti from '../components/Confetti';
 import { ICON } from '../components/ui/icons';
 import { appColors as colors } from '../theme';
@@ -194,6 +195,7 @@ export default function LessonScreen({ lesson, currentStreak = 0, onBack, onComp
   const [totalScored, setTotalScored] = useState(0);
   const [feedbackState, setFeedbackState] = useState<FeedbackState>('idle');
   const [answered, setAnswered] = useState(false);
+  const [explainContext, setExplainContext] = useState('');
   const [showSummary, setShowSummary] = useState(false);
   const [exerciseKey, setExerciseKey] = useState(0);
 
@@ -239,6 +241,7 @@ export default function LessonScreen({ lesson, currentStreak = 0, onBack, onComp
       return;
     }
 
+    setExplainContext(buildExplainContext(currentExercise, isCorrect));
     setFeedbackState(isCorrect ? 'correct' : 'incorrect');
   }
 
@@ -249,6 +252,7 @@ export default function LessonScreen({ lesson, currentStreak = 0, onBack, onComp
 
     setFeedbackState('idle');
     setAnswered(false);
+    setExplainContext('');
 
     const nextIndex = exerciseIndex + 1;
     if (nextIndex >= exercises.length || mistakes >= MAX_MISTAKES) {
@@ -310,6 +314,7 @@ export default function LessonScreen({ lesson, currentStreak = 0, onBack, onComp
           maxMistakes={MAX_MISTAKES}
           feedbackState={feedbackState}
           feedbackRationale={currentExercise.rationale}
+          explainContext={explainContext}
           onClose={onBack}
           onContinue={handleContinue}
         >
@@ -325,6 +330,38 @@ export default function LessonScreen({ lesson, currentStreak = 0, onBack, onComp
       </View>
     </SafeAreaView>
   );
+}
+
+// ─── Explain-My-Answer context builder ───────────────────────────────────────
+
+function buildExplainContext(exercise: Exercise, isCorrect: boolean): string {
+  const result = isCorrect ? 'The learner answered correctly.' : 'The learner answered incorrectly.';
+  switch (exercise.kind) {
+    case 'multipleChoice': {
+      const correct = exercise.options.find((o) => o.isCorrect);
+      return `Question: ${exercise.prompt}\nCorrect answer: ${correct?.text ?? '(unknown)'}\n${result}\nHint: ${exercise.rationale}`;
+    }
+    case 'trueFalse':
+      return `Statement: ${exercise.statement}\nCorrect answer: ${exercise.isTrue ? 'True' : 'False'}\n${result}\nHint: ${exercise.rationale}`;
+    case 'fillBlank':
+      return `Fill-in-the-blank template: ${exercise.template}\nCorrect blanks: ${exercise.blanks.join(', ')}\n${result}\nHint: ${exercise.rationale}`;
+    case 'matchPairs':
+      return `Match pairs exercise.\nPairs: ${exercise.pairs.map((p) => `${p.term} → ${p.definition}`).join('; ')}\n${result}\nHint: ${exercise.rationale}`;
+    case 'categorize':
+      return `Categorize exercise: ${exercise.instruction}\nBuckets: ${exercise.buckets.map((b) => b.label).join(', ')}\n${result}\nHint: ${exercise.rationale}`;
+    case 'tapToOrder':
+      return `Order exercise: ${exercise.instruction}\nCorrect order: ${exercise.items.sort((a, b) => a.rank - b.rank).map((i) => i.text).join(' → ')}\n${result}\nHint: ${exercise.rationale}`;
+    case 'scenarioDecision': {
+      const best = exercise.choices.find((c) => c.isCorrect);
+      return `Scenario: ${exercise.story}\nBest choice: ${best?.text ?? '(unknown)'}\nOutcome: ${best?.outcome ?? ''}\n${result}\nHint: ${exercise.rationale}`;
+    }
+    case 'miniStory': {
+      const best = exercise.choices.find((c) => c.isCorrect);
+      return `Mini story exercise. Choice prompt: ${exercise.choicePrompt}\nBest choice: ${best?.text ?? '(unknown)'}\n${result}\nHint: ${exercise.rationale}`;
+    }
+    default:
+      return `Finance exercise (${exercise.kind}).\nHint: ${exercise.rationale}\n${result}`;
+  }
 }
 
 // ─── Exercise dispatcher ──────────────────────────────────────────────────────
@@ -357,6 +394,8 @@ function ExerciseRenderer({ exercise, onAnswer, answered }: RendererProps) {
       return <CalculatorView exercise={exercise} onAnswer={onAnswer} answered={answered} />;
     case 'recallPrompt':
       return <RecallPromptView exercise={exercise} onAnswer={onAnswer} answered={answered} />;
+    case 'sliderPlayground':
+      return <SliderPlaygroundView exercise={exercise} onAnswer={onAnswer} answered={answered} />;
     default: {
       // Unknown kind — safe fallback: warn and auto-advance so the lesson can continue
       console.warn('[ExerciseRenderer] Unhandled exercise kind:', (exercise as { kind: string }).kind);

@@ -19,6 +19,7 @@ import {
 import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { gameDefinitions } from '../data/gameDefinitions';
+import { isTriviaAnsweredToday, getDailyTriviaQuestion, getTodayDateStr } from '../data/dailyTrivia';
 import {
   computeNodeStates,
   getNextPathLesson,
@@ -55,6 +56,7 @@ type Props = {
   onLaunchGame: (gameId: GameId) => void;
   onChestOpened?: (chestId: string, reward: { brainBucks: number; xp: number }) => void;
   onUpdatePortfolio: (p: import('../types/trading').Portfolio) => void;
+  onOpenDailyTrivia?: () => void;
   initialTab?: DashboardTab;
 };
 
@@ -76,6 +78,7 @@ export default function DashboardScreen({
   onLaunchGame,
   onChestOpened,
   onUpdatePortfolio,
+  onOpenDailyTrivia,
   initialTab,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -205,6 +208,7 @@ export default function DashboardScreen({
               marketStatus={marketStatus}
               lastUpdated={lastUpdated}
               onStartLesson={nextPathLesson ? () => onOpenLesson(nextPathLesson) : undefined}
+              onOpenDailyTrivia={onOpenDailyTrivia}
             />
           ) : null}
 
@@ -275,6 +279,7 @@ type HomeProps = {
   marketStatus: 'loading' | 'ready' | 'fallback';
   lastUpdated: string | null;
   onStartLesson?: () => void;
+  onOpenDailyTrivia?: () => void;
 };
 
 function HomeTab({
@@ -286,7 +291,12 @@ function HomeTab({
   marketStatus,
   lastUpdated,
   onStartLesson,
+  onOpenDailyTrivia,
 }: HomeProps) {
+  const triviaAnswered = isTriviaAnsweredToday(lessonProgress.dailyTrivia);
+  const triviaWasCorrect = lessonProgress.dailyTrivia?.wasCorrect ?? false;
+  const triviaStreak = lessonProgress.dailyTrivia?.triviaStreak ?? 0;
+
   return (
     <View>
       <View style={styles.hero}>
@@ -318,6 +328,14 @@ function HomeTab({
           </Text>
         </View>
       ) : null}
+
+      {/* Daily Trivia card */}
+      <DailyTriviaCard
+        answered={triviaAnswered}
+        wasCorrect={triviaWasCorrect}
+        triviaStreak={triviaStreak}
+        onPress={onOpenDailyTrivia}
+      />
 
       <View style={styles.metricRow}>
         <MetricBox label="XP" value={`${lessonProgress.xp}`} />
@@ -1243,6 +1261,57 @@ function MarketRow({ asset, expanded }: { asset: MarketAsset; expanded?: boolean
   );
 }
 
+function DailyTriviaCard({
+  answered,
+  wasCorrect,
+  triviaStreak,
+  onPress,
+}: {
+  answered: boolean;
+  wasCorrect: boolean;
+  triviaStreak: number;
+  onPress?: () => void;
+}) {
+  const today = getTodayDateStr();
+  const available = !!getDailyTriviaQuestion(today);
+  if (!available) return null;
+
+  return (
+    <View style={styles.triviaCard}>
+      <View style={styles.triviaCardInner}>
+        <View>
+          <Text style={styles.triviaEyebrow}>DAILY CHALLENGE</Text>
+          {answered ? (
+            <>
+              <Text style={styles.triviaTitle}>
+                {wasCorrect ? 'Challenge complete!' : 'Good effort today'}
+              </Text>
+              <Text style={styles.triviaBody}>
+                {wasCorrect ? 'Correct answer — +5 Brain Bucks earned.' : 'Come back tomorrow for another.'}
+                {triviaStreak > 1 ? `  ${triviaStreak}-day streak.` : ''}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.triviaTitle}>Test your knowledge</Text>
+              <Text style={styles.triviaBody}>One question, one chance. Resets tomorrow.</Text>
+            </>
+          )}
+        </View>
+        {!answered && onPress ? (
+          <TouchableOpacity style={styles.triviaBtn} onPress={onPress} activeOpacity={0.85}>
+            <Text style={styles.triviaBtnText}>START</Text>
+          </TouchableOpacity>
+        ) : answered ? (
+          <View style={[styles.triviaDoneBadge, wasCorrect ? styles.triviaDoneBadgeCorrect : styles.triviaDoneBadgeMissed]}>
+            <Text style={styles.triviaDoneBadgeText}>{wasCorrect ? 'DONE' : 'TRIED'}</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function MetricBox({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.metricBox}>
@@ -1854,6 +1923,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     fontWeight: '700',
+  },
+  triviaCard: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#F5C142',
+    backgroundColor: '#FFFDF4',
+    overflow: 'hidden',
+  },
+  triviaCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    gap: 12,
+  },
+  triviaEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B8860B',
+    letterSpacing: 1.1,
+    marginBottom: 3,
+  },
+  triviaTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#10241D',
+    marginBottom: 2,
+  },
+  triviaBody: {
+    fontSize: 12,
+    color: '#6B745F',
+    lineHeight: 17,
+  },
+  triviaBtn: {
+    backgroundColor: '#F5C142',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+  },
+  triviaBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#10241D',
+    letterSpacing: 0.5,
+  },
+  triviaDoneBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  triviaDoneBadgeCorrect: {
+    backgroundColor: '#D4EDDA',
+  },
+  triviaDoneBadgeMissed: {
+    backgroundColor: '#F0EDE0',
+  },
+  triviaDoneBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#6B745F',
+    letterSpacing: 0.5,
   },
   marketPanel: {
     marginTop: 18,

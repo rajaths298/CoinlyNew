@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AiHeaderButton from './src/components/AiHeaderButton';
 import GlobalAiAssistant, { type AiChatMessage } from './src/components/GlobalAiAssistant';
 import DashboardScreen from './src/screens/DashboardScreen';
+import DailyTriviaScreen, { TRIVIA_CORRECT_REWARD, TRIVIA_PARTICIPATION_REWARD } from './src/screens/DailyTriviaScreen';
 import GameScreen from './src/screens/GameScreen';
 import LessonScreen from './src/screens/LessonScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -18,6 +19,7 @@ import {
   updateReviewItemAfterLesson,
 } from './src/data/lessonCatalog';
 import { getPathLessonById } from './src/data/pathCatalog';
+import { getDailyTriviaQuestion, getTodayDateStr } from './src/data/dailyTrivia';
 import { createInitialLemonadeSession } from './src/engine/lemonadeEngine';
 import { createInitialPropertySession } from './src/engine/propertyLadderEngine';
 import { createInitialStartupSession } from './src/engine/startupStoryEngine';
@@ -40,7 +42,7 @@ import type { Lesson, LessonPerformance, LessonProgress, RealWorldQuest } from '
 import type { Portfolio } from './src/types/trading';
 import type { OnboardingProfile, QuizAnswers, SignupProfile } from './src/types/onboarding';
 
-type Screen = 'start' | 'onboarding' | 'signup' | 'dashboard' | 'lesson' | 'game';
+type Screen = 'start' | 'onboarding' | 'signup' | 'dashboard' | 'lesson' | 'game' | 'dailyTrivia';
 type DevSkipTarget = 'dashboard' | 'lesson';
 type DashboardTab = 'home' | 'learn' | 'games' | 'budget' | 'explore';
 
@@ -241,6 +243,40 @@ export default function App() {
     setScreen('lesson');
   };
 
+  const handleOpenDailyTrivia = () => {
+    setScreen('dailyTrivia');
+  };
+
+  const handleDailyTriviaComplete = (wasCorrect: boolean) => {
+    const today = getTodayDateStr();
+    setLessonProgress((current) => {
+      const prev = current.dailyTrivia;
+      let triviaStreak = 1;
+      if (prev?.lastTriviaDate) {
+        const prevMs = new Date(prev.lastTriviaDate).getTime();
+        const todayMs = new Date(today).getTime();
+        const diffDays = (todayMs - prevMs) / 86_400_000;
+        if (diffDays < 2) triviaStreak = (prev.triviaStreak ?? 0) + 1;
+      }
+      const question = getDailyTriviaQuestion(today);
+      const questionKey = question ? `${question.lessonId}:${question.exerciseIdx}` : '';
+      return {
+        ...current,
+        brainBucks: (current.brainBucks ?? 0) + (wasCorrect ? TRIVIA_CORRECT_REWARD : TRIVIA_PARTICIPATION_REWARD),
+        dailyTrivia: {
+          date: today,
+          questionKey,
+          answered: true,
+          wasCorrect,
+          triviaStreak,
+          lastTriviaDate: today,
+        },
+      };
+    });
+    setPostLessonTab('home');
+    setScreen('dashboard');
+  };
+
   const handleCompleteAndAdvanceLesson = (lesson: Lesson, performance?: LessonPerformance) => {
     const isMixedPractice = lesson.moduleId === 'mixed-practice';
     // Path lessons are those authored in pathCatalog (duo-*, u2-*, u3-*, etc.)
@@ -421,9 +457,28 @@ export default function App() {
           onLaunchGame={handleLaunchGame}
           onChestOpened={handleChestOpened}
           onUpdatePortfolio={setPortfolio}
+          onOpenDailyTrivia={handleOpenDailyTrivia}
           initialTab={postLessonTab}
         />
       );
+    }
+
+    if (screen === 'dailyTrivia' && profile) {
+      const today = getTodayDateStr();
+      const question = getDailyTriviaQuestion(today);
+      if (question) {
+        return (
+          <DailyTriviaScreen
+            question={question}
+            lessonProgress={lessonProgress}
+            onComplete={handleDailyTriviaComplete}
+            onBack={() => setScreen('dashboard')}
+          />
+        );
+      }
+      // No question available — fall back to dashboard
+      setScreen('dashboard');
+      return null;
     }
 
     if (screen === 'lesson' && profile) {
@@ -510,6 +565,7 @@ function getPageTitle(screen: Screen) {
   if (screen === 'signup') return 'Signup';
   if (screen === 'dashboard') return 'Dashboard';
   if (screen === 'lesson') return 'Lesson';
+  if (screen === 'dailyTrivia') return 'Daily Trivia';
   return 'Game';
 }
 

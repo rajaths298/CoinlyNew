@@ -115,16 +115,19 @@ const l1Exercises: Exercise[] = [
 const l2Exercises: Exercise[] = [
   {
     id: 'inv1-l2-e1',
-    kind: 'recallPrompt',
+    kind: 'sliderPlayground',
     competencyId: 'riskReturn',
-    rationale: 'Compounding is the mechanism that makes time in market so powerful.',
-    prompt: 'Explain in your own words: why does $1,000 invested today become much more than $1,000 × years × rate?',
-    conceptReveal: 'Because returns earn returns. In year one, you earn interest on your principal. In year two, you earn interest on the principal PLUS last year\'s gains. Each year the base grows, so the absolute gain grows too — even at the same percentage rate.',
-    checkpoints: [
-      'Returns compound: gains become part of the base that earns future gains',
-      'The longer the time horizon, the more dramatic the compounding effect',
-      'This is why Einstein (apocryphally) called compound interest "the eighth wonder of the world"',
+    rationale: 'The curve bends upward sharply after year 20 — that is compounding in action. Each year earns interest on previous interest, not just the original principal. Notice how the last 10 years add far more than the first 10.',
+    prompt: 'Drag the years slider and watch $1,000 grow. Notice when the curve starts to bend.',
+    explanation: 'Future Value = Principal × (1 + rate)ⁿ',
+    targetLabel: 'Future value',
+    formulaKey: 'compoundGrowth',
+    inputs: [
+      { id: 'principal', label: 'Starting amount', value: 1000, min: 1000, max: 1000, step: 1, prefix: '$' },
+      { id: 'rate', label: 'Annual return', value: 7, min: 7, max: 7, step: 1, suffix: '%' },
+      { id: 'years', label: 'Years invested', value: 10, min: 1, max: 40, step: 1 },
     ],
+    graph: { xInputId: 'years', xLabel: 'Years', yLabel: 'Value ($)' },
   },
   {
     id: 'inv1-l2-e2',
@@ -191,16 +194,19 @@ const l2Exercises: Exercise[] = [
 const l3Exercises: Exercise[] = [
   {
     id: 'inv1-l3-e1',
-    kind: 'recallPrompt',
+    kind: 'sliderPlayground',
     competencyId: 'riskReturn',
-    rationale: 'Risk-return trade-off is the central tension in all investing decisions.',
-    prompt: 'Why can\'t every investment offer both high returns AND zero risk? What\'s the trade-off?',
-    conceptReveal: 'High returns compensate investors for accepting uncertainty. If an asset had no risk AND high returns, everyone would buy it — driving the price up and the return down until risk and return re-balanced. Risk is the price you pay for return.',
-    checkpoints: [
-      'Higher potential return always comes with higher potential loss',
-      'Risk-free assets (e.g. government bonds) offer lower returns because demand for "safety" is high',
-      'Risk tolerance is personal — it depends on your time horizon, goals, and emotional comfort',
+    rationale: 'At 5% for 30 years $10,000 grows to $43k. At 8% it reaches $100k. That 3% difference — the reward for accepting more risk — is why asset allocation matters more than almost any other decision.',
+    prompt: 'Drag the annual return slider. See how a 1% difference compounds into a massive gap over 30 years.',
+    explanation: 'Future Value = $10,000 × (1 + rate)³⁰',
+    targetLabel: 'Value after 30 years',
+    formulaKey: 'compoundGrowth',
+    inputs: [
+      { id: 'principal', label: 'Starting amount', value: 10000, min: 10000, max: 10000, step: 1, prefix: '$' },
+      { id: 'rate', label: 'Annual return', value: 5, min: 1, max: 12, step: 0.5, suffix: '%' },
+      { id: 'years', label: 'Years invested', value: 30, min: 30, max: 30, step: 1 },
     ],
+    graph: { xInputId: 'rate', xLabel: 'Annual return (%)', yLabel: 'Value ($)' },
   },
   {
     id: 'inv1-l3-e2',
@@ -296,16 +302,19 @@ const practiceExercises: Exercise[] = [
 const l4Exercises: Exercise[] = [
   {
     id: 'inv1-l4-e1',
-    kind: 'recallPrompt',
+    kind: 'sliderPlayground',
     competencyId: 'portfolioConstruction',
-    rationale: 'Time horizon is the single biggest determinant of how much risk you should take on.',
-    prompt: 'Why should someone investing for 30 years hold a very different portfolio from someone investing for 3 years?',
-    conceptReveal: 'Short horizons mean volatility is dangerous — a crash just before you need the money is catastrophic. Long horizons mean time to recover from downturns and benefit from compound growth. The 30-year investor can afford to own volatile stocks; the 3-year investor should favour stability.',
-    checkpoints: [
-      'Long horizon → can tolerate more volatility → more stocks appropriate',
-      'Short horizon → need capital preservation → more bonds/cash appropriate',
-      'Sequence-of-returns risk: a crash near the end of your horizon hits much harder than one early on',
+    rationale: 'Starting at 25 instead of 35 — investing for 40 years rather than 30 — with $10,000 at 7% is the difference between $149k and $76k. Not from saving more, just from giving compounding more time. Every year of delay costs more than the last.',
+    prompt: 'Move the years slider. See what starting earlier — or later — does to the same $10,000 at 7%.',
+    explanation: 'Future Value = $10,000 × (1 + 7%)ⁿ',
+    targetLabel: 'Value at retirement',
+    formulaKey: 'compoundGrowth',
+    inputs: [
+      { id: 'principal', label: 'Starting amount', value: 10000, min: 10000, max: 10000, step: 1, prefix: '$' },
+      { id: 'rate', label: 'Annual return', value: 7, min: 7, max: 7, step: 1, suffix: '%' },
+      { id: 'years', label: 'Years invested', value: 20, min: 5, max: 40, step: 1 },
     ],
+    graph: { xInputId: 'years', xLabel: 'Years invested', yLabel: 'Value ($)' },
   },
   {
     id: 'inv1-l4-e2',

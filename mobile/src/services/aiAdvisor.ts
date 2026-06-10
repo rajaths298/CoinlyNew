@@ -79,6 +79,45 @@ User Profile: ${JSON.stringify(userProfile || {})}
   }
 }
 
+export async function askExerciseExplanation(
+  exerciseContext: string,
+  timeoutMs = 8000,
+): Promise<string> {
+  const ollamaUrl = 'http://localhost:11434/api/chat';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const systemPrompt =
+    'You are a friendly finance tutor embedded in a mobile learning app. ' +
+    'In 2-3 conversational sentences, explain the exercise answer described below using a concrete everyday example. ' +
+    'Be warm and clear. No jargon, no bullet lists, no bold text.';
+
+  try {
+    const response = await fetch(ollamaUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3.1:8b',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: exerciseContext },
+        ],
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.message.content as string;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function getCoinlyAiConnectionHelp(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.length > 0

@@ -16,6 +16,7 @@ type Props = {
   maxMistakes: number;
   feedbackState: FeedbackState;
   feedbackRationale: string;
+  explainContext?: string;
   onClose: () => void;
   onContinue: () => void;
   children: React.ReactNode;
@@ -28,6 +29,7 @@ export default function ExerciseShell({
   maxMistakes,
   feedbackState,
   feedbackRationale,
+  explainContext,
   onClose,
   onContinue,
   children,
@@ -67,6 +69,7 @@ export default function ExerciseShell({
         <FeedbackBanner
           state={feedbackState}
           rationale={feedbackRationale}
+          explainContext={explainContext}
           onContinue={onContinue}
         />
       </View>

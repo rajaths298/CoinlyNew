@@ -12,7 +12,8 @@ export type ExerciseKind =
   | 'miniStory'
   | 'calculator'
   | 'trueFalse'
-  | 'recallPrompt';
+  | 'recallPrompt'
+  | 'sliderPlayground';
 
 type ExerciseBase = {
   id: string;
@@ -109,6 +110,20 @@ export type RecallPromptExercise = ExerciseBase & {
   checkpoints: string[];
 };
 
+export type SliderPlaygroundExercise = ExerciseBase & {
+  kind: 'sliderPlayground';
+  prompt: string;
+  explanation: string;
+  targetLabel: string;
+  formulaKey: CalculatorFormulaKey;
+  inputs: CalculatorInput[];
+  graph: {
+    xInputId: string;
+    xLabel: string;
+    yLabel: string;
+  };
+};
+
 export type Exercise =
   | MultipleChoiceExercise
   | MatchPairsExercise
@@ -119,7 +134,8 @@ export type Exercise =
   | MiniStoryExercise
   | CalculatorExercise
   | TrueFalseExercise
-  | RecallPromptExercise;
+  | RecallPromptExercise
+  | SliderPlaygroundExercise;
 
 // ─── Path / progression ──────────────────────────────────────────────────────
 
