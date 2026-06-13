@@ -12,7 +12,7 @@ function makeLesson(id: string, title: string, exercises: Exercise[], xp: number
     unitId: 'unit-stocks-7', unitTitle: 'Stocks & the Market',
     courseTrackId: 'stocks', moduleId: 'stocks-foundations',
     durationMinutes: Math.max(4, Math.round(exercises.length * 1.3)),
-    xp, prerequisites: [], difficulty: 1, learningObjectives: [],
+    xp, prerequisites: [], difficulty: 1, learningObjectives: [`Understand and apply: ${title}.`],
     competencyIds: ['portfolioConstruction', 'riskReturn'],
     competencyTags: ['stocks'],
     masteryWeight: 1, formulaRefs: [], misconceptions: [], steps: [], exercises,
@@ -484,7 +484,7 @@ export const stocksAndMarketUnit: PathUnit = {
   title: 'Stocks & the Market',
   subtitle: 'Ownership, exchanges, reading a quote, and why diversification is your best edge.',
   color: '#BE4C4C',
-  icon: '',
+  icon: '📉',
   trackId: 'stocks',
   competencyIds: ['portfolioConstruction', 'riskReturn', 'financialAnalysis'],
   nodes: [

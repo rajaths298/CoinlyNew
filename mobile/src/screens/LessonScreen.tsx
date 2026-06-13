@@ -98,6 +98,19 @@ function SummaryScreen({ lesson, xpEarned, correctCount, totalScored, currentStr
             </Text>
           </View>
         )}
+
+        {lesson.winStatement && (
+          <View style={summaryStyles.winBlock}>
+            <Text style={summaryStyles.winText}>✓  {lesson.winStatement}</Text>
+          </View>
+        )}
+
+        {lesson.lessonTeaser && (
+          <View style={summaryStyles.teaserBlock}>
+            <Text style={summaryStyles.teaserLabel}>UP NEXT</Text>
+            <Text style={summaryStyles.teaserText}>{lesson.lessonTeaser}</Text>
+          </View>
+        )}
       </View>
 
       <TouchableOpacity style={summaryStyles.continueBtn} onPress={onContinue} activeOpacity={0.85}>
@@ -173,6 +186,30 @@ const summaryStyles = StyleSheet.create({
     maxWidth: 280,
   },
   perfectText: { fontSize: 13, color: '#155724', fontWeight: '600', textAlign: 'center' },
+  winBlock: {
+    backgroundColor: '#1a3a2a',
+    borderRadius: 10,
+    padding: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: '#4CBE8A',
+    alignSelf: 'stretch',
+  },
+  winText: { color: '#4CBE8A', fontSize: 13, lineHeight: 19, fontWeight: '600' },
+  teaserBlock: {
+    backgroundColor: '#1a2a3a',
+    borderRadius: 10,
+    padding: 14,
+    alignSelf: 'stretch',
+  },
+  teaserLabel: {
+    color: '#4C9BE8',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  teaserText: { color: '#ccd8e8', fontSize: 13, lineHeight: 19 },
   continueBtn: {
     backgroundColor: colors.black,
     borderRadius: 16,

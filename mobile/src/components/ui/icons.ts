@@ -11,6 +11,8 @@ export const ICON = {
   lines:   '≡︎', // ≡ three lines      — guidebook / book
   trophy:  '★︎', // ★ solid star       — trophy (top of path)
   check:   '✓︎', // ✓ check mark       — completed state
+  up:      '▲︎', // ▲ upward triangle  — price up
+  down:    '▼︎', // ▼ downward triangle — price down
 } as const;
 
 export type IconName = keyof typeof ICON;

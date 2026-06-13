@@ -14,7 +14,7 @@ function makeLesson(id: string, title: string, exercises: Exercise[], xp: number
     unitId: 'unit-crypto-10', unitTitle: 'Crypto',
     courseTrackId: 'investing', moduleId: 'investing-crypto',
     durationMinutes: Math.max(4, Math.round(exercises.length * 1.3)),
-    xp, prerequisites: [], difficulty: 3, learningObjectives: [],
+    xp, prerequisites: [], difficulty: 3, learningObjectives: [`Understand and apply: ${title}.`],
     competencyIds: ['riskReturn', 'portfolioConstruction'],
     competencyTags: ['crypto', 'blockchain', 'investing', 'digital-assets'],
     masteryWeight: 1, formulaRefs: [], misconceptions: [], steps: [], exercises,

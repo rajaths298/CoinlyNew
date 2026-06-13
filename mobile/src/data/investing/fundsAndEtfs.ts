@@ -13,7 +13,7 @@ function makeLesson(id: string, title: string, exercises: Exercise[], xp: number
     unitId: 'unit-etfs-8', unitTitle: 'Funds: ETFs & Index Funds',
     courseTrackId: 'investing', moduleId: 'investing-funds',
     durationMinutes: Math.max(4, Math.round(exercises.length * 1.3)),
-    xp, prerequisites: [], difficulty: 2, learningObjectives: [],
+    xp, prerequisites: [], difficulty: 2, learningObjectives: [`Understand and apply: ${title}.`],
     competencyIds: ['portfolioConstruction', 'riskReturn'],
     competencyTags: ['etfs', 'investing'],
     masteryWeight: 1, formulaRefs: [], misconceptions: [], steps: [], exercises,

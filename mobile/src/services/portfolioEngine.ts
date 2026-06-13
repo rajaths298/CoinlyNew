@@ -5,12 +5,12 @@ import { isFeatureUnlocked, featureUnlockProgress } from './featureUnlocks';
 
 // ─── Feature gating — delegates to the generic featureUnlocks registry ────────
 
-export function isInvestTabUnlocked(progress: LessonProgress): boolean {
-  return isFeatureUnlocked('investTab', progress);
+export function isInvestTabUnlocked(_progress: LessonProgress): boolean {
+  return true;
 }
 
-export function investTabUnlockProgress(progress: LessonProgress): { done: number; total: number } {
-  return featureUnlockProgress('investTab', progress);
+export function investTabUnlockProgress(_progress: LessonProgress): { done: number; total: number } {
+  return { done: 1, total: 1 };
 }
 
 export function isCryptoUnlocked(progress: LessonProgress): boolean {

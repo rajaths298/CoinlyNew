@@ -49,6 +49,12 @@ const introSlides: IntroSlide[] = [
 
 const quizQuestions: QuizQuestion[] = [
   {
+    id: 'ageGroup',
+    eyebrow: 'YOUR PATH',
+    title: 'Which learning path fits you best?',
+    options: ['Ages 5–10', 'Ages 11–18', 'Ages 19+'],
+  },
+  {
     id: 'primaryGoal',
     eyebrow: 'GOAL',
     title: 'What do you want Coinly to help with first?',
@@ -215,7 +221,7 @@ export default function OnboardingScreen({ aiHeaderButton, onBackToStart, onComp
         <Text style={styles.headerTitle}>Coinly</Text>
 
         <View style={styles.headerRightActions}>
-          <Text style={styles.headerAction}>{isQuiz ? `${quizIndex + 1}/8` : 'INTRO'}</Text>
+          <Text style={styles.headerAction}>{isQuiz ? `${quizIndex + 1}/${quizQuestions.length}` : 'INTRO'}</Text>
           {aiHeaderButton}
         </View>
       </View>

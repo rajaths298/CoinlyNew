@@ -19,6 +19,7 @@ import type {
   ReviewQueueItem,
 } from '../types/lesson';
 import type { OnboardingProfile } from '../types/onboarding';
+import { getLocalDayKey, isConsecutiveDayKey } from '../utils/dateKey';
 
 type LevelBlueprint = {
   id: LessonLevel;
@@ -887,15 +888,16 @@ export function applyLessonCompletionToProgress(current: LessonProgress, lesson:
   const bbBase = Math.round(earnedXp * 0.3);
   const newBrainBucks = (current.brainBucks ?? 0) + bbBase;
 
-  // Daily XP tracking
-  const todayDate = new Date().toISOString().slice(0, 10);
+  // Daily XP tracking — local day key; UTC keys flip to "tomorrow" mid-evening
+  // for users west of Greenwich (wrong streak state, double increments).
+  const todayDate = getLocalDayKey();
   const lastDate = current.lastStreakDate;
   const isNewDay = !lastDate || lastDate !== todayDate;
   const newDailyXpEarned = isNewDay ? earnedXp : (current.dailyXpEarned ?? 0) + earnedXp;
 
   // Streak: increment only once per day
   const newStreak = isNewDay
-    ? (lastDate && isConsecutiveDay(lastDate, todayDate))
+    ? (lastDate && isConsecutiveDayKey(lastDate, todayDate))
       ? current.streak + 1
       : 1
     : current.streak;
@@ -917,13 +919,6 @@ export function applyLessonCompletionToProgress(current: LessonProgress, lesson:
     badges: [...new Set(badges)],
     streakFreezes,
   };
-}
-
-function isConsecutiveDay(prev: string, curr: string): boolean {
-  const prevDate = new Date(prev);
-  const currDate = new Date(curr);
-  const diff = currDate.getTime() - prevDate.getTime();
-  return diff >= 86400000 && diff < 172800000; // between 1 and 2 days apart
 }
 
 export function applyQuestCompletionToProgress(

@@ -15,15 +15,31 @@ function calcResult(formulaKey: string, values: Record<string, number>): number 
       const p = values['principal'] ?? 1000;
       const r = (values['rate'] ?? 7) / 100;
       const n = values['years'] ?? 10;
+      const contribution = values['contribution'] ?? 0;
+      if (contribution > 0) {
+        const months = n * 12;
+        const monthlyRate = r / 12;
+        const futureContributions = monthlyRate === 0
+          ? contribution * months
+          : contribution * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate);
+        return Math.round((p * Math.pow(1 + r, n)) + futureContributions);
+      }
       return Math.round(p * Math.pow(1 + r, n));
     }
+    case 'deductibleReserve': {
+      const deductible = values['deductible'] ?? 0;
+      const uncovered = values['uncovered'] ?? 0;
+      const cashOnHand = values['cashOnHand'] ?? 0;
+      return Math.round(deductible + uncovered - cashOnHand);
+    }
     case 'emergencyFund': {
-      const rent = values['rent'] ?? 0;
+      const rent = values['rent'] ?? values['monthlyEssentials'] ?? 0;
       const food = values['food'] ?? 0;
       const utilities = values['utilities'] ?? 0;
       const transport = values['transport'] ?? 0;
       const months = values['months'] ?? 6;
-      return Math.round((rent + food + utilities + transport) * months);
+      const currentSavings = values['currentSavings'] ?? 0;
+      return Math.round(((rent + food + utilities + transport) * months) - currentSavings);
     }
     case 'budgetSurplus':
     case 'budgetBalance': {
@@ -42,10 +58,55 @@ function calcResult(formulaKey: string, values: Record<string, number>): number 
       if (r === 0) return Math.round(principal / n);
       return Math.round((principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1));
     }
+    case 'loanTotalCost': {
+      const monthlyPayment = values['monthlyPayment'] ?? 0;
+      const months = values['months'] ?? 12;
+      const principal = values['principal'] ?? 0;
+      return Math.round((monthlyPayment * months) - principal);
+    }
+    case 'netWorth': {
+      return Math.round((values['assets'] ?? 0) - (values['liabilities'] ?? 0));
+    }
+    case 'profitMargin': {
+      const revenue = values['revenue'] ?? 0;
+      if (revenue <= 0) return 0;
+      const costs = values['costs'] ?? 0;
+      const taxReserve = values['taxReserve'] ?? 0;
+      return Math.round(((revenue - costs - taxReserve) / revenue) * 1000) / 10;
+    }
+    case 'taxWithholding': {
+      const perCheck = values['perCheck'] ?? 0;
+      const checks = values['checks'] ?? 0;
+      const credits = values['credits'] ?? 0;
+      return Math.round((perCheck * checks) - credits);
+    }
+    case 'utilization': {
+      const balance = values['balance'] ?? 0;
+      const limit = values['limit'] ?? 1;
+      return Math.round((balance / Math.max(1, limit)) * 1000) / 10;
+    }
+    case 'portfolioReturn': {
+      if ('principal' in values) {
+        const p = values['principal'] ?? 0;
+        const r = (values['rate'] ?? 0) / 100;
+        const n = values['years'] ?? 1;
+        return Math.round(p * Math.pow(1 + r, n));
+      }
+      if ('grossProfit' in values) {
+        return Math.round((values['grossProfit'] ?? 0) - (values['borrowingCost'] ?? 0));
+      }
+      if ('totalInvested' in values || 'currentValue' in values) {
+        return Math.round((values['currentValue'] ?? 0) - (values['totalInvested'] ?? 0));
+      }
+      const stocksWeight = (values['stocksWeight'] ?? 0) / 100;
+      const stockReturn = values['stockReturn'] ?? 0;
+      const bondReturn = values['bondReturn'] ?? 0;
+      return Math.round(((stocksWeight * stockReturn) + ((1 - stocksWeight) * bondReturn)) * 10) / 10;
+    }
     case 'savingsGoal': {
       // Monthly payment needed to reach a future goal
       // PMT = FV × r / ((1+r)^n − 1),  where r = monthly rate, n = months
-      const goal = values['goal'] ?? 0;
+      const goal = (values['goal'] ?? values['target'] ?? 0) - (values['current'] ?? 0);
       const n = Math.max(1, values['months'] ?? 12);
       const annualRate = values['rate'] ?? 0;
       const r = annualRate / 100 / 12;
@@ -61,6 +122,25 @@ function calcResult(formulaKey: string, values: Record<string, number>): number 
     default:
       return 0;
   }
+}
+
+function isPercentResult(formulaKey: string, values: Record<string, number>, targetLabel: string): boolean {
+  const label = targetLabel.toLowerCase();
+  if (formulaKey === 'profitMargin' || formulaKey === 'utilization') return true;
+  if (formulaKey === 'portfolioReturn' && 'stocksWeight' in values && !('principal' in values)) return true;
+  return label.includes('margin') || label.includes('utilization') || label.includes('expected annual return');
+}
+
+function formatCurrencyResult(value: number): string {
+  const sign = value < 0 ? '-' : '';
+  return `${sign}$${Math.abs(value).toLocaleString()}`;
+}
+
+function formatResult(value: number, formulaKey: string, values: Record<string, number>, targetLabel: string): string {
+  if (isPercentResult(formulaKey, values, targetLabel)) {
+    return `${value.toLocaleString()}%`;
+  }
+  return formatCurrencyResult(value);
 }
 
 export default function CalculatorView({ exercise, onAnswer, answered }: Props) {
@@ -121,7 +201,7 @@ export default function CalculatorView({ exercise, onAnswer, answered }: Props) 
 
       <View style={styles.resultBox}>
         <Text style={styles.resultLabel}>{exercise.targetLabel}</Text>
-        <Text style={styles.resultValue}>${result.toLocaleString()}</Text>
+        <Text style={styles.resultValue}>{formatResult(result, exercise.formulaKey, values, exercise.targetLabel)}</Text>
       </View>
 
       {!answered && (

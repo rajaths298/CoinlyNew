@@ -23,16 +23,14 @@ import { getDailyTriviaQuestion, getTodayDateStr } from './src/data/dailyTrivia'
 import { createInitialLemonadeSession } from './src/engine/lemonadeEngine';
 import { createInitialPropertySession } from './src/engine/propertyLadderEngine';
 import { createInitialStartupSession } from './src/engine/startupStoryEngine';
-<<<<<<< Updated upstream
 import { createInitialStockMarketSession } from './src/engine/stockMarketEngine';
-=======
->>>>>>> Stashed changes
-import { askCoinlyAI, getCoinlyAiConnectionHelp, type LearningContext } from './src/services/aiAdvisor';
+import { streamCoinlyAI, getCoinlyAiConnectionHelp, type LearningContext } from './src/services/aiAdvisor';
+import { configureNotifications, maybeAskAfterFirstLesson, syncDailyReminder } from './src/services/notifications';
 import { loadProgress, saveProgress } from './src/services/progressStorage';
 import { loadPortfolio, savePortfolio, INITIAL_PORTFOLIO } from './src/services/portfolioStorage';
 import { buildCoinlyFinancialContext, type CoinlyAppContext } from './src/services/budgetStorage';
-<<<<<<< Updated upstream
 import { loadStockMarketSession, resetStockMarketSession, saveStockMarketSession } from './src/services/stockMarketStorage';
+import { getLocalDayKey } from './src/utils/dateKey';
 import type {
   GameId,
   GameProgress,
@@ -44,10 +42,6 @@ import type {
 } from './src/types/game';
 import type { Lesson, LessonPerformance, LessonProgress, RealWorldQuest } from './src/types/lesson';
 import type { Portfolio } from './src/types/trading';
-=======
-import type { GameId, GameProgress, GameResult, LemonadeSession, PropertySession, StartupSession } from './src/types/game';
-import type { Lesson, LessonProgress } from './src/types/lesson';
->>>>>>> Stashed changes
 import type { OnboardingProfile, QuizAnswers, SignupProfile } from './src/types/onboarding';
 
 type Screen = 'start' | 'onboarding' | 'signup' | 'dashboard' | 'lesson' | 'game' | 'dailyTrivia';
@@ -72,7 +66,7 @@ const initialGameProgress: GameProgress = {
 const initialAiMessages: AiChatMessage[] = [{
   id: 'welcome',
   sender: 'ai',
-  text: "I'm Coinly AI, ready offline in this app. Ask me about your budget, lessons, games, investing, or goals.",
+  text: "Hi, I'm Coinly AI",
 }];
 
 const devSkipTarget = process.env.EXPO_PUBLIC_COINLY_SKIP as DevSkipTarget | undefined;
@@ -130,10 +124,7 @@ export default function App() {
   const [lemonadeSession, setLemonadeSession] = useState<LemonadeSession>(() => createInitialLemonadeSession());
   const [propertySession, setPropertySession] = useState<PropertySession>(() => createInitialPropertySession());
   const [startupSession, setStartupSession] = useState<StartupSession>(() => createInitialStartupSession());
-<<<<<<< Updated upstream
   const [stockMarketSession, setStockMarketSession] = useState<StockMarketSession>(() => createInitialStockMarketSession());
-=======
->>>>>>> Stashed changes
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>();
   const [activeGameId, setActiveGameId] = useState<GameId | undefined>();
   const [isAiOpen, setIsAiOpen] = useState(false);
@@ -150,10 +141,12 @@ export default function App() {
 
   // Load persisted progress on first mount
   useEffect(() => {
+    void configureNotifications();
     loadProgress().then((saved) => {
       if (saved.completedLessonIds.length > 0 || saved.xp > 0) {
         setLessonProgressRaw(saved);
       }
+      void syncDailyReminder(saved);
     }).catch(() => {/* non-fatal */});
     loadPortfolio().then((saved) => {
       setPortfolioRaw(saved);
@@ -169,6 +162,22 @@ export default function App() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep the reminder ladder in sync with study state: meeting the daily goal
+  // cancels today's 18:00 nudge, and each new day reschedules the next three.
+  useEffect(() => {
+    void syncDailyReminder(lessonProgress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonProgress.lastStreakDate, lessonProgress.dailyXpEarned]);
+
+  // Ask for notification permission once, right after the first completed
+  // lesson (their first win) — never on a cold first launch.
+  useEffect(() => {
+    if (lessonProgress.completedLessonIds.length >= 1) {
+      void maybeAskAfterFirstLesson(lessonProgress);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonProgress.completedLessonIds.length]);
 
   useEffect(() => {
     routeOpacity.setValue(0);
@@ -209,12 +218,9 @@ export default function App() {
     setLemonadeSession(createInitialLemonadeSession());
     setPropertySession(createInitialPropertySession());
     setStartupSession(createInitialStartupSession());
-<<<<<<< Updated upstream
     void saveProgress(initialLessonProgress);
     if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
     void resetStockMarketSession().then(setStockMarketSession);
-=======
->>>>>>> Stashed changes
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen(target);
@@ -243,12 +249,9 @@ export default function App() {
     setLemonadeSession(createInitialLemonadeSession());
     setPropertySession(createInitialPropertySession());
     setStartupSession(createInitialStartupSession());
-<<<<<<< Updated upstream
     void saveProgress(initialLessonProgress);
     if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
     void resetStockMarketSession().then(setStockMarketSession);
-=======
->>>>>>> Stashed changes
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen('start');
@@ -357,6 +360,9 @@ export default function App() {
       ...current,
       results: [...current.results, result],
     }));
+    // gameProgress isn't persisted; this stamp lets the daily game quest
+    // survive an app restart.
+    setLessonProgress((current) => ({ ...current, lastGamePlayedDate: getLocalDayKey() }));
   };
 
   const buildAppContext = (): CoinlyAppContext => ({
@@ -388,6 +394,7 @@ export default function App() {
     setAiInput('');
     setIsAiTyping(true);
 
+    const aiId = `ai-${Date.now()}`;
     try {
       const financialContext = await buildCoinlyFinancialContext(profile, buildAppContext());
 
@@ -422,18 +429,28 @@ export default function App() {
         answers: profile?.answers,
       };
 
-      const reply = await askCoinlyAI(text, history, financialContext, learningCtx, userProfile);
-      setAiMessages((current) => [...current, {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: reply,
-      }]);
+      await streamCoinlyAI(
+        text,
+        history,
+        financialContext,
+        learningCtx,
+        userProfile,
+        (full) => {
+          setIsAiTyping(false);
+          setAiMessages((current) =>
+            current.some((message) => message.id === aiId)
+              ? current.map((message) => (message.id === aiId ? { ...message, text: full } : message))
+              : [...current, { id: aiId, sender: 'ai', text: full }],
+          );
+        },
+      );
     } catch (error) {
-      setAiMessages((current) => [...current, {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: getCoinlyAiConnectionHelp(error),
-      }]);
+      const help = getCoinlyAiConnectionHelp(error);
+      setAiMessages((current) =>
+        current.some((message) => message.id === aiId)
+          ? current.map((message) => (message.id === aiId ? { ...message, text: message.text || help } : message))
+          : [...current, { id: aiId, sender: 'ai', text: help }],
+      );
     } finally {
       setIsAiTyping(false);
     }
@@ -526,19 +543,13 @@ export default function App() {
             lemonadeSession={lemonadeSession}
             propertySession={propertySession}
             startupSession={startupSession}
-<<<<<<< Updated upstream
             stockMarketSession={stockMarketSession}
-=======
->>>>>>> Stashed changes
             onBack={() => setScreen('dashboard')}
             onComplete={handleCompleteGame}
             onUpdateLemonadeSession={setLemonadeSession}
             onUpdatePropertySession={setPropertySession}
             onUpdateStartupSession={setStartupSession}
-<<<<<<< Updated upstream
             onUpdateStockMarketSession={handleUpdateStockMarketSession}
-=======
->>>>>>> Stashed changes
           />
         );
       }

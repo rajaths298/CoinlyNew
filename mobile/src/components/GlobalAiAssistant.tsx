@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -39,6 +39,12 @@ export default function GlobalAiAssistant({
   onSend,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40);
+    return () => clearTimeout(timer);
+  }, [messages, isTyping]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="formSheet" onRequestClose={onClose}>
@@ -57,9 +63,11 @@ export default function GlobalAiAssistant({
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.history}
           contentContainerStyle={styles.historyContent}
           showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.map((message) => {
             const isUser = message.sender === 'user';

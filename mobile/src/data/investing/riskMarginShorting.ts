@@ -14,7 +14,7 @@ function makeLesson(id: string, title: string, exercises: Exercise[], xp: number
     unitId: 'unit-risk-9', unitTitle: 'Risk, Margin & Short Selling',
     courseTrackId: 'investing', moduleId: 'investing-advanced',
     durationMinutes: Math.max(4, Math.round(exercises.length * 1.3)),
-    xp, prerequisites: [], difficulty: 3, learningObjectives: [],
+    xp, prerequisites: [], difficulty: 3, learningObjectives: [`Understand and apply: ${title}.`],
     competencyIds: ['riskReturn', 'portfolioConstruction'],
     competencyTags: ['risk', 'margin', 'shorting', 'investing'],
     masteryWeight: 1, formulaRefs: [], misconceptions: [], steps: [], exercises,

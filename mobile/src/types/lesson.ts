@@ -84,7 +84,8 @@ export type CalculatorFormulaKey =
   | 'taxWithholding'
   | 'utilization'
   | 'portfolioReturn'
-  | 'savingsGoal';
+  | 'savingsGoal'
+  | 'loanTotalCost';
 
 export type CalculatorInput = {
   id: string;
@@ -216,6 +217,8 @@ export type Lesson = {
   realWorldQuest?: RealWorldQuest;
   // new: rich exercise format for the Duolingo-style player
   exercises?: import('./learn').Exercise[];
+  winStatement?: string;
+  lessonTeaser?: string;
 };
 
 export type LessonUnit = {
@@ -354,5 +357,8 @@ export type LessonProgress = {
     triviaStreak: number;   // consecutive days answered
     lastTriviaDate?: string;
   };
+  // Local day key (YYYY-MM-DD) of the last game round — gameProgress itself is
+  // not persisted, so the daily "play a game" quest needs this to survive restarts.
+  lastGamePlayedDate?: string;
   schemaVersion?: number;
 };

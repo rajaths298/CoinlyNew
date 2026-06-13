@@ -20,7 +20,7 @@ function makeLesson(
     unitId: 'unit-investing-6', unitTitle: 'Intro to Investing',
     courseTrackId: 'investing', moduleId: 'investing-foundations',
     durationMinutes: Math.max(4, Math.round(exercises.length * 1.3)),
-    xp, prerequisites: [], difficulty: 1, learningObjectives: [],
+    xp, prerequisites: [], difficulty: 1, learningObjectives: [`Understand and apply: ${title}.`],
     competencyIds: ['riskReturn', 'portfolioConstruction'],
     competencyTags: ['investing'],
     masteryWeight: 1, formulaRefs: [], misconceptions: [], steps: [], exercises,
@@ -500,7 +500,7 @@ export const introToInvestingUnit: PathUnit = {
   title: 'Intro to Investing',
   subtitle: 'Why invest, how compounding works, risk vs. return, and making your first move.',
   color: '#BE9B4C',
-  icon: '',
+  icon: '📈',
   trackId: 'investing',
   competencyIds: ['riskReturn', 'portfolioConstruction', 'behavior'],
   nodes: [
