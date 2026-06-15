@@ -31,6 +31,11 @@ import {
   toStockMarketGameResult,
 } from '../engine/stockMarketEngine';
 import { appColors as colors } from '../theme';
+import { useTutorial } from '../hooks/useTutorial';
+import TutorialOverlay from '../components/tutorial/TutorialOverlay';
+import TutorialEntryModal from '../components/tutorial/TutorialEntryModal';
+import TutorialHelpButton from '../components/tutorial/TutorialHelpButton';
+import type { TutorialStep } from '../components/tutorial/types';
 import type {
   GameDefinition,
   GameResult,
@@ -102,6 +107,23 @@ export default function StockMarketGameScreen({
   const leaderboard = getStockMarketLeaderboard(session);
   const playerRank = leaderboard.findIndex((row) => row.isPlayer) + 1;
 
+  const scrollRef = useRef<ScrollView>(null);
+  const searchRef = useRef<View>(null);
+  const boardRef = useRef<View>(null);
+  const ticketRef = useRef<View>(null);
+  const buyButtonRef = useRef<View>(null);
+  const portfolioRef = useRef<View>(null);
+  const nextRoundRef = useRef<View>(null);
+  const tutorialSteps = useMemo<TutorialStep[]>(() => [
+    { id: 'search', targetRef: searchRef, heading: 'Find an asset', body: 'Research anything — type a ticker like AAPL or a name like Bitcoin and tap Search. The board above also has ready picks.' },
+    { id: 'select', targetRef: boardRef, actionGated: true, heading: 'Pick something to trade', body: 'Tap any asset card to select it. Green means it is up today, red means down.' },
+    { id: 'ticket', targetRef: ticketRef, heading: 'Build your order', body: 'Choose Buy, then a dollar amount — you start with $100,000 in virtual cash. The chips are quick presets.' },
+    { id: 'buy', targetRef: buyButtonRef, actionGated: true, heading: 'Place the trade', body: 'Tap Buy Shares — your order fills instantly at the live price.' },
+    { id: 'portfolio', targetRef: portfolioRef, heading: 'Track your holdings', body: 'Everything you own shows here with live profit and loss.' },
+    { id: 'next', targetRef: nextRoundRef, heading: 'Advance the market', body: 'When you are done, advance to the next round to let prices change. That is the loop — happy trading!' },
+  ], []);
+  const tutorial = useTutorial(game.id, tutorialSteps);
+
   if (!fontsLoaded) return null;
 
   function commitSession(nextSession: StockMarketSession) {
@@ -164,6 +186,7 @@ export default function StockMarketGameScreen({
     });
     setSearchResults([]);
     setOrderError('');
+    tutorial.completeStep('select');
   }
 
   function selectSymbol(symbol: string) {
@@ -175,6 +198,7 @@ export default function StockMarketGameScreen({
       lastMessage: `${symbol} selected at ${formatMoney(quote.price)}.`,
     });
     setOrderError('');
+    tutorial.completeStep('select');
   }
 
   function executeTrade() {
@@ -187,6 +211,7 @@ export default function StockMarketGameScreen({
     }
     setOrderError('');
     commitSession(result.session);
+    tutorial.completeStep('buy');
   }
 
   async function advanceRound() {
@@ -221,6 +246,7 @@ export default function StockMarketGameScreen({
   return (
     <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 28 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -231,6 +257,7 @@ export default function StockMarketGameScreen({
           <Text style={styles.wordmark}>Coinly</Text>
           <View style={styles.headerRightActions}>
             <Text style={styles.headerAction}>GAME</Text>
+            <TutorialHelpButton onPress={tutorial.reset} />
             {aiHeaderButton}
           </View>
         </View>
@@ -273,7 +300,7 @@ export default function StockMarketGameScreen({
             </View>
 
             <SectionTitle title="Market Board" action={`${liveCount(session.quotes)} live`} />
-            <View style={styles.marketGrid}>
+            <View style={styles.marketGrid} ref={boardRef}>
               {session.quotes.map((quote) => (
                 <TouchableOpacity
                   key={quote.symbol}
@@ -298,7 +325,7 @@ export default function StockMarketGameScreen({
               ))}
             </View>
 
-            <View style={styles.searchSection}>
+            <View style={styles.searchSection} ref={searchRef}>
               <Text style={styles.sectionTitle}>Search Stocks and ETFs</Text>
               <View style={styles.searchRow}>
                 <TextInput
@@ -330,7 +357,7 @@ export default function StockMarketGameScreen({
               ) : null}
             </View>
 
-            <View style={styles.ticket}>
+            <View style={styles.ticket} ref={ticketRef}>
               <View style={styles.ticketHeader}>
                 <View>
                   <Text style={styles.sectionTitle}>Order Ticket</Text>
@@ -377,17 +404,21 @@ export default function StockMarketGameScreen({
                 </TouchableOpacity>
               </View>
               {orderError ? <Text style={styles.errorText}>{orderError}</Text> : null}
-              <TouchableOpacity
-                style={[styles.primaryButton, !selectedQuote && styles.disabledButton]}
-                activeOpacity={0.86}
-                onPress={executeTrade}
-                disabled={!selectedQuote}
-              >
-                <Text style={styles.primaryButtonText}>{orderSide === 'buy' ? 'BUY SHARES' : 'SELL SHARES'}</Text>
-              </TouchableOpacity>
+              <View ref={buyButtonRef}>
+                <TouchableOpacity
+                  style={[styles.primaryButton, !selectedQuote && styles.disabledButton]}
+                  activeOpacity={0.86}
+                  onPress={executeTrade}
+                  disabled={!selectedQuote}
+                >
+                  <Text style={styles.primaryButtonText}>{orderSide === 'buy' ? 'BUY SHARES' : 'SELL SHARES'}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            <SectionTitle title="Portfolio" action={`${session.holdings.length} holdings`} />
+            <View ref={portfolioRef}>
+              <SectionTitle title="Portfolio" action={`${session.holdings.length} holdings`} />
+            </View>
             {session.holdings.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No positions yet</Text>
@@ -442,12 +473,28 @@ export default function StockMarketGameScreen({
               </View>
             )}
 
-            <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={advanceRound}>
-              {isAdvancing ? <ActivityIndicator color={colors.black} /> : <Text style={styles.primaryButtonText}>{session.round >= session.maxRounds ? 'FINISH MATCH' : 'NEXT ROUND'}</Text>}
-            </TouchableOpacity>
+            <View ref={nextRoundRef}>
+              <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={advanceRound}>
+                {isAdvancing ? <ActivityIndicator color={colors.black} /> : <Text style={styles.primaryButtonText}>{session.round >= session.maxRounds ? 'FINISH MATCH' : 'NEXT ROUND'}</Text>}
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </ScrollView>
+      <TutorialEntryModal
+        visible={tutorial.showEntryModal}
+        gameTitle={game.title}
+        onYes={tutorial.startTutorial}
+        onSkip={tutorial.skip}
+      />
+      <TutorialOverlay
+        step={tutorial.currentStep}
+        stepIndex={tutorial.stepIndex}
+        totalSteps={tutorial.totalSteps}
+        onAdvance={tutorial.advance}
+        onSkip={tutorial.skip}
+        scrollRef={scrollRef}
+      />
     </View>
   );
 }

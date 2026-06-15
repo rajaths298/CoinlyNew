@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -37,6 +37,11 @@ import {
   updateStartupLogo,
 } from '../engine/startupStoryEngine';
 import { appColors as colors } from '../theme';
+import { useTutorial } from '../hooks/useTutorial';
+import TutorialOverlay from '../components/tutorial/TutorialOverlay';
+import TutorialEntryModal from '../components/tutorial/TutorialEntryModal';
+import TutorialHelpButton from '../components/tutorial/TutorialHelpButton';
+import type { TutorialStep } from '../components/tutorial/types';
 import type {
   GameDefinition,
   GameResult,
@@ -86,6 +91,31 @@ export default function StartupStoryScreen({
     onComplete(toStartupGameResult(session, game.competency));
   }, [game.competency, onComplete, session]);
 
+  const scrollRef = useRef<ScrollView>(null);
+  const archetypeRef = useRef<View>(null);
+  const startRef = useRef<View>(null);
+  const runwayRef = useRef<View>(null);
+  const strategyRef = useRef<View>(null);
+  const closeRef = useRef<View>(null);
+  const ledgerRef = useRef<View>(null);
+  const tutorialSteps = useMemo<TutorialStep[]>(() => [
+    { id: 'archetype', targetRef: archetypeRef, heading: 'Pick your model', body: 'Choose a business model — each starts with different cash, margins, and risks.' },
+    { id: 'start', targetRef: startRef, actionGated: true, heading: 'Launch it', body: 'Give it a name if you like, then start your company.' },
+    { id: 'runway', targetRef: runwayRef, heading: 'Mind your runway', body: 'These are your vital signs. Runway is how many months of cash you have left — never let it hit zero.' },
+    { id: 'strategy', targetRef: strategyRef, actionGated: true, heading: 'Make a move', body: 'Each month you pick one strategy move. Some spend cash to grow, others bring money in.' },
+    { id: 'close', targetRef: closeRef, actionGated: true, heading: 'Close the month', body: 'Locked in your move? Close the month to see how it plays out.' },
+    { id: 'ledger', targetRef: ledgerRef, heading: 'See the outcome', body: 'Here is the result and the lesson behind it. Keep making smart calls to reach durable profit!' },
+  ], []);
+  const tutorial = useTutorial(game.id, tutorialSteps);
+
+  // Action-gated steps advance as the founder loop progresses.
+  useEffect(() => {
+    if (!tutorial.isActive) return;
+    if (session.phase !== 'setup') tutorial.completeStep('start');
+    if (session.actionTakenThisMonth) tutorial.completeStep('strategy');
+    if (session.phase === 'ledger' || session.phase === 'result') tutorial.completeStep('close');
+  }, [session.phase, session.actionTakenThisMonth, tutorial]);
+
   if (!fontsLoaded) return null;
 
   const startCompany = () => {
@@ -126,6 +156,7 @@ export default function StartupStoryScreen({
   return (
     <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -136,6 +167,7 @@ export default function StartupStoryScreen({
           <Text style={styles.wordmark}>Coinly</Text>
           <View style={styles.headerRightActions}>
             <Text style={styles.headerAction}>GAME</Text>
+            <TutorialHelpButton onPress={tutorial.reset} />
             {aiHeaderButton}
           </View>
         </View>
@@ -147,6 +179,8 @@ export default function StartupStoryScreen({
             onChangeCompanyName={setCompanyName}
             onSelectArchetype={setSelectedArchetype}
             onStart={startCompany}
+            archetypeRef={archetypeRef}
+            startRef={startRef}
           />
         ) : null}
 
@@ -159,6 +193,10 @@ export default function StartupStoryScreen({
             onResolveReview={resolveReview}
             onCloseMonth={closeMonth}
             onContinueTurn={continueTurn}
+            runwayRef={runwayRef}
+            strategyRef={strategyRef}
+            closeRef={closeRef}
+            ledgerRef={ledgerRef}
           />
         ) : null}
 
@@ -166,6 +204,20 @@ export default function StartupStoryScreen({
           <ResultPanel session={session} onBack={onBack} onRestart={restart} />
         ) : null}
       </ScrollView>
+      <TutorialEntryModal
+        visible={tutorial.showEntryModal}
+        gameTitle={game.title}
+        onYes={tutorial.startTutorial}
+        onSkip={tutorial.skip}
+      />
+      <TutorialOverlay
+        step={tutorial.currentStep}
+        stepIndex={tutorial.stepIndex}
+        totalSteps={tutorial.totalSteps}
+        onAdvance={tutorial.advance}
+        onSkip={tutorial.skip}
+        scrollRef={scrollRef}
+      />
     </View>
   );
 }
@@ -176,12 +228,16 @@ function SetupPanel({
   onChangeCompanyName,
   onSelectArchetype,
   onStart,
+  archetypeRef,
+  startRef,
 }: {
   companyName: string;
   selectedArchetype: StartupArchetypeId;
   onChangeCompanyName: (value: string) => void;
   onSelectArchetype: (value: StartupArchetypeId) => void;
   onStart: () => void;
+  archetypeRef?: React.RefObject<View | null>;
+  startRef?: React.RefObject<View | null>;
 }) {
   return (
     <View>
@@ -205,7 +261,7 @@ function SetupPanel({
         />
       </View>
 
-      <View style={styles.archetypeGrid}>
+      <View style={styles.archetypeGrid} ref={archetypeRef}>
         {startupArchetypeCatalog.map((archetype) => {
           const selected = selectedArchetype === archetype.id;
           return (
@@ -231,9 +287,11 @@ function SetupPanel({
         })}
       </View>
 
-      <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={onStart}>
-        <Text style={styles.primaryButtonText}>START COMPANY</Text>
-      </TouchableOpacity>
+      <View ref={startRef}>
+        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={onStart}>
+          <Text style={styles.primaryButtonText}>START COMPANY</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -246,6 +304,10 @@ function FounderDashboard({
   onResolveReview,
   onCloseMonth,
   onContinueTurn,
+  runwayRef,
+  strategyRef,
+  closeRef,
+  ledgerRef,
 }: {
   session: StartupSession;
   onCommitAction: (actionId: StartupActionId) => void;
@@ -254,6 +316,10 @@ function FounderDashboard({
   onResolveReview: (reviewId: string) => void;
   onCloseMonth: () => void;
   onContinueTurn: () => void;
+  runwayRef?: React.RefObject<View | null>;
+  strategyRef?: React.RefObject<View | null>;
+  closeRef?: React.RefObject<View | null>;
+  ledgerRef?: React.RefObject<View | null>;
 }) {
   const archetype = session.archetypeId ? getStartupArchetype(session.archetypeId) : startupArchetypeCatalog[0];
   const event = getStartupEvent(session);
@@ -272,10 +338,12 @@ function FounderDashboard({
       <BusinessScene session={session} />
 
       {session.phase === 'ledger' && session.lastLedger ? (
-        <LedgerPanel ledger={session.lastLedger} onContinue={onContinueTurn} />
+        <View ref={ledgerRef}>
+          <LedgerPanel ledger={session.lastLedger} onContinue={onContinueTurn} />
+        </View>
       ) : null}
 
-      <View style={styles.hudGrid}>
+      <View style={styles.hudGrid} ref={runwayRef}>
         <MetricCard label="Cash" value={formatMoney(session.cash)} alert={session.cash < session.monthlyCosts * 1.5} />
         <MetricCard label="Runway" value={`${session.runwayMonths} mo`} alert={session.runwayMonths < 3} />
         <MetricCard label="Revenue" value={formatMoney(session.revenue)} />
@@ -310,7 +378,7 @@ function FounderDashboard({
 
       <CustomerReviewPanel session={session} onResolveReview={onResolveReview} />
 
-      <View style={styles.panel}>
+      <View style={styles.panel} ref={strategyRef}>
         <View style={styles.panelHeaderRow}>
           <Text style={styles.sectionTitle}>Strategy Move</Text>
           <Text style={styles.panelMeta}>{session.actionTakenThisMonth ? 'COMMITTED' : 'CHOOSE 1'}</Text>
@@ -373,14 +441,16 @@ function FounderDashboard({
       </View>
 
       {session.phase !== 'ledger' ? (
-        <TouchableOpacity
-          style={[styles.primaryButton, !session.actionTakenThisMonth && styles.primaryButtonDisabled]}
-          activeOpacity={0.86}
-          disabled={!session.actionTakenThisMonth}
-          onPress={onCloseMonth}
-        >
-          <Text style={styles.primaryButtonText}>{session.actionTakenThisMonth ? 'CLOSE MONTH' : 'CHOOSE STRATEGY FIRST'}</Text>
-        </TouchableOpacity>
+        <View ref={closeRef}>
+          <TouchableOpacity
+            style={[styles.primaryButton, !session.actionTakenThisMonth && styles.primaryButtonDisabled]}
+            activeOpacity={0.86}
+            disabled={!session.actionTakenThisMonth}
+            onPress={onCloseMonth}
+          >
+            <Text style={styles.primaryButtonText}>{session.actionTakenThisMonth ? 'CLOSE MONTH' : 'CHOOSE STRATEGY FIRST'}</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       <MilestonePanel session={session} />

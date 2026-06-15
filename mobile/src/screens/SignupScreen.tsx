@@ -16,6 +16,7 @@ import {
 import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
+import { useAuth } from '../contexts/AuthContext';
 import type { SignupProfile } from '../types/onboarding';
 
 type Props = {
@@ -48,8 +49,10 @@ export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Pro
     PlayfairDisplay_700Bold,
     BebasNeue_400Regular,
   });
+  const { signUp } = useAuth();
   const [form, setForm] = useState<FormState>(initialForm);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [submitting, setSubmitting] = useState(false);
 
   if (!fontsLoaded) return null;
 
@@ -77,12 +80,29 @@ export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Pro
     return Object.keys(nextErrors).length === 0;
   };
 
-  const submit = () => {
-    if (!validate()) return;
-    onComplete({
-      name: form.name.trim(),
-      email: form.email.trim(),
-    });
+  const submit = async () => {
+    if (submitting || !validate()) return;
+    const name = form.name.trim();
+    const email = form.email.trim();
+
+    setSubmitting(true);
+    const { error, needsConfirmation } = await signUp(email, form.password, name);
+    setSubmitting(false);
+
+    if (error) {
+      // Surface the auth error through the existing inline field errors (no
+      // layout change): password problems on the password field, everything
+      // else on the email field.
+      if (/password/i.test(error)) setErrors((e) => ({ ...e, password: error }));
+      else setErrors((e) => ({ ...e, email: error }));
+      return;
+    }
+    if (needsConfirmation) {
+      setErrors((e) => ({ ...e, email: 'Check your email to confirm your account, then log in.' }));
+      return;
+    }
+    // Account created and signed in — hand off to the app (sets profile + dashboard).
+    onComplete({ name, email });
   };
 
   return (
@@ -125,6 +145,7 @@ export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Pro
             onChangeText={(value) => updateField('name', value)}
             autoCapitalize="words"
             textContentType="name"
+            maxLength={50}
           />
           <Field
             label="Email"
@@ -165,8 +186,8 @@ export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Pro
           {errors.acceptedTerms ? <Text style={styles.errorText}>{errors.acceptedTerms}</Text> : null}
         </View>
 
-        <TouchableOpacity style={styles.submitButton} activeOpacity={0.86} onPress={submit}>
-          <Text style={styles.submitText}>CREATE ACCOUNT</Text>
+        <TouchableOpacity style={styles.submitButton} activeOpacity={0.86} onPress={submit} disabled={submitting}>
+          <Text style={styles.submitText}>{submitting ? 'CREATING ACCOUNT…' : 'CREATE ACCOUNT'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -182,6 +203,7 @@ type FieldProps = {
   keyboardType?: 'default' | 'email-address';
   secureTextEntry?: boolean;
   textContentType?: 'name' | 'emailAddress' | 'newPassword';
+  maxLength?: number;
 };
 
 function Field({
@@ -193,6 +215,7 @@ function Field({
   keyboardType,
   secureTextEntry,
   textContentType,
+  maxLength,
 }: FieldProps) {
   return (
     <View style={styles.field}>
@@ -207,6 +230,7 @@ function Field({
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
         textContentType={textContentType}
+        maxLength={maxLength}
       />
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>

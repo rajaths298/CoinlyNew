@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import SignInScreen from './src/screens/auth/SignInScreen';
+import { appColors } from './src/theme';
 import AiHeaderButton from './src/components/AiHeaderButton';
 import GlobalAiAssistant, { type AiChatMessage } from './src/components/GlobalAiAssistant';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -8,6 +12,7 @@ import DailyTriviaScreen, { TRIVIA_CORRECT_REWARD, TRIVIA_PARTICIPATION_REWARD }
 import GameScreen from './src/screens/GameScreen';
 import LessonScreen from './src/screens/LessonScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import StartScreen from './src/screens/StartScreen';
 import { getGameDefinition } from './src/data/gameDefinitions';
@@ -23,13 +28,14 @@ import { getDailyTriviaQuestion, getTodayDateStr } from './src/data/dailyTrivia'
 import { createInitialLemonadeSession } from './src/engine/lemonadeEngine';
 import { createInitialPropertySession } from './src/engine/propertyLadderEngine';
 import { createInitialStartupSession } from './src/engine/startupStoryEngine';
-import { createInitialStockMarketSession } from './src/engine/stockMarketEngine';
+import { createInitialStockMarketSession, normalizeStockMarketSession } from './src/engine/stockMarketEngine';
 import { streamCoinlyAI, getCoinlyAiConnectionHelp, type LearningContext } from './src/services/aiAdvisor';
 import { configureNotifications, maybeAskAfterFirstLesson, syncDailyReminder } from './src/services/notifications';
-import { loadProgress, saveProgress } from './src/services/progressStorage';
-import { loadPortfolio, savePortfolio, INITIAL_PORTFOLIO } from './src/services/portfolioStorage';
+import { INITIAL_PORTFOLIO } from './src/services/portfolioStorage';
 import { buildCoinlyFinancialContext, type CoinlyAppContext } from './src/services/budgetStorage';
-import { loadStockMarketSession, resetStockMarketSession, saveStockMarketSession } from './src/services/stockMarketStorage';
+import * as cloudSync from './src/services/cloudSync';
+import type { SyncSnapshot } from './src/services/cloudSync';
+import { restoreSeenFromCloud } from './src/services/tutorialStorage';
 import { getLocalDayKey } from './src/utils/dateKey';
 import type {
   GameId,
@@ -44,7 +50,7 @@ import type { Lesson, LessonPerformance, LessonProgress, RealWorldQuest } from '
 import type { Portfolio } from './src/types/trading';
 import type { OnboardingProfile, QuizAnswers, SignupProfile } from './src/types/onboarding';
 
-type Screen = 'start' | 'onboarding' | 'signup' | 'dashboard' | 'lesson' | 'game' | 'dailyTrivia';
+type Screen = 'start' | 'onboarding' | 'signup' | 'signin' | 'dashboard' | 'lesson' | 'game' | 'dailyTrivia' | 'profile';
 type DevSkipTarget = 'dashboard' | 'lesson';
 type DashboardTab = 'home' | 'learn' | 'games' | 'budget' | 'explore';
 
@@ -87,10 +93,16 @@ const devProfile: OnboardingProfile = {
   },
 };
 
-export default function App() {
+function AuthedApp() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [screen, setScreen] = useState<Screen>(
     devSkipTarget === 'dashboard' || devSkipTarget === 'lesson' ? devSkipTarget : 'start',
   );
+  const [migrationOpen, setMigrationOpen] = useState(false);
+  // True while a signed-in user's cloud state is loading, so we show the splash
+  // instead of flashing the logged-out StartScreen before landing on the dashboard.
+  const [hydrating, setHydrating] = useState<boolean>(!!userId);
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswers>(
     devSkipTarget ? devProfile.answers : {},
   );
@@ -100,24 +112,21 @@ export default function App() {
   const [lessonProgress, setLessonProgressRaw] = useState<LessonProgress>(initialLessonProgress);
   const [postLessonTab, setPostLessonTab] = useState<DashboardTab | undefined>();
   const [portfolio, setPortfolioRaw] = useState<Portfolio>(INITIAL_PORTFOLIO);
-  const portfolioSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Persist to AsyncStorage on every progress change (debounced 500 ms)
+  // Progress: update React state, then hand off to cloudSync, which writes the
+  // per-user cache immediately and pushes to Supabase on a debounce (with retry).
   const setLessonProgress = useCallback((updater: LessonProgress | ((prev: LessonProgress) => LessonProgress)) => {
     setLessonProgressRaw((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => { void saveProgress(next); }, 500);
+      cloudSync.saveProgress(next);
       return next;
     });
   }, []);
-  // Portfolio: TradingTab calls this directly with the already-saved portfolio,
-  // so we just update state here. The tab handles its own debounced savePortfolio calls.
+  // Portfolio: TradingTab persists via cloudSync itself; here we mirror the value
+  // into React state and the cache/cloud so the rest of the app stays in sync.
   const setPortfolio = useCallback((p: Portfolio) => {
     setPortfolioRaw(p);
-    if (portfolioSaveTimerRef.current) clearTimeout(portfolioSaveTimerRef.current);
-    portfolioSaveTimerRef.current = setTimeout(() => { void savePortfolio(p); }, 500);
+    cloudSync.savePortfolio(p);
   }, []);
 
   const [gameProgress, setGameProgress] = useState<GameProgress>(initialGameProgress);
@@ -131,7 +140,6 @@ export default function App() {
   const [aiMessages, setAiMessages] = useState<AiChatMessage[]>(initialAiMessages);
   const [aiInput, setAiInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
-  const stockMarketSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeOpacity = useRef(new Animated.Value(1)).current;
   const routeTranslateY = useRef(new Animated.Value(0)).current;
   const activeLesson = profile
@@ -139,29 +147,95 @@ export default function App() {
     : undefined;
   const activeGame = getGameDefinition(activeGameId);
 
-  // Load persisted progress on first mount
+  // Apply a cloud snapshot to local state (hydrate / foreground resync / post-
+  // migration). Uses the raw setters so re-applying cloud data never re-saves.
+  const applySnapshot = useCallback((snap: SyncSnapshot) => {
+    if (snap.progress) {
+      setLessonProgressRaw(snap.progress);
+      void syncDailyReminder(snap.progress);
+    }
+    if (snap.portfolio) setPortfolioRaw(snap.portfolio);
+    if (snap.games.stockMarket) setStockMarketSession(normalizeStockMarketSession(snap.games.stockMarket));
+    if (snap.games.lemonade) setLemonadeSession(snap.games.lemonade);
+    if (snap.games.property) setPropertySession(snap.games.property);
+    if (snap.games.startup) setStartupSession(snap.games.startup);
+    if (snap.games.budget != null) void cloudSync.restoreBudgetLegacy(snap.games.budget);
+    if (snap.meta?.tutorialsSeen) void restoreSeenFromCloud(snap.meta.tutorialsSeen);
+  }, []);
+
+  // Configure notifications once on launch (independent of auth).
   useEffect(() => {
     void configureNotifications();
-    loadProgress().then((saved) => {
-      if (saved.completedLessonIds.length > 0 || saved.xp > 0) {
-        setLessonProgressRaw(saved);
+  }, []);
+
+  // Cloud sync, keyed on the signed-in user. Handles three transitions:
+  //  - signed out -> in: hydrate from Supabase (cache fallback), reconstruct the
+  //    onboarding profile, offer one-time migration, and re-sync on foreground.
+  //  - in -> out: clear in-memory state and return to the logged-out StartScreen.
+  //  - launch with a restored session: show the splash until the dashboard loads.
+  const prevUserIdRef = useRef<string | undefined>(userId);
+  useEffect(() => {
+    const prevUserId = prevUserIdRef.current;
+    prevUserIdRef.current = userId;
+
+    if (!userId) {
+      // Only reset on an actual sign-out (not a logged-out cold start / dev skip).
+      if (prevUserId) {
+        cloudSync.clearActiveUser();
+        setProfile(null);
+        setQuizAnswers({});
+        setLessonProgressRaw(initialLessonProgress);
+        setPortfolioRaw(INITIAL_PORTFOLIO);
+        setGameProgress(initialGameProgress);
+        setLemonadeSession(createInitialLemonadeSession());
+        setPropertySession(createInitialPropertySession());
+        setStartupSession(createInitialStartupSession());
+        setStockMarketSession(createInitialStockMarketSession());
+        setScreen('start');
       }
-      void syncDailyReminder(saved);
-    }).catch(() => {/* non-fatal */});
-    loadPortfolio().then((saved) => {
-      setPortfolioRaw(saved);
-    }).catch(() => {/* non-fatal */});
-    loadStockMarketSession()
-      .then(setStockMarketSession)
-      .catch(() => undefined);
+      setHydrating(false);
+      return;
+    }
+
+    let cancelled = false;
+    setHydrating(true);
+
+    void (async () => {
+      const snap = await cloudSync.hydrateAll(userId);
+      if (cancelled) return;
+      applySnapshot(snap);
+
+      // Reconstruct the onboarding profile from the cloud so a returning user (or
+      // a fresh sign-in) lands on the dashboard. After sign-up handleSignupComplete
+      // has already set the profile, so this is skipped.
+      if (!profile) {
+        const answers = snap.meta?.onboardingAnswers ?? {};
+        const name =
+          snap.profile?.displayName ??
+          snap.meta?.profileName ??
+          (user?.user_metadata?.display_name as string | undefined) ??
+          '';
+        setQuizAnswers(answers);
+        setProfile({ user: { name, email: user?.email ?? '' }, answers });
+        setScreen('dashboard');
+      }
+
+      if (await cloudSync.shouldOfferMigration(userId) && !cancelled) {
+        setMigrationOpen(true);
+      }
+      if (!cancelled) setHydrating(false);
+    })();
+
+    const unsubscribe = cloudSync.subscribeForeground((snap) => {
+      if (!cancelled) applySnapshot(snap);
+    });
 
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      if (portfolioSaveTimerRef.current) clearTimeout(portfolioSaveTimerRef.current);
-      if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
+      cancelled = true;
+      unsubscribe();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId]);
 
   // Keep the reminder ladder in sync with study state: meeting the daily goal
   // cancels today's 18:00 nudge, and each new day reschedules the next three.
@@ -204,31 +278,53 @@ export default function App() {
 
   const handleUpdateStockMarketSession = useCallback((session: StockMarketSession) => {
     setStockMarketSession(session);
-    if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
-    stockMarketSaveTimerRef.current = setTimeout(() => {
-      void saveStockMarketSession(session);
-    }, 300);
+    cloudSync.saveGame('stockMarket', session);
+  }, []);
+
+  const handleUpdateLemonadeSession = useCallback((session: LemonadeSession) => {
+    setLemonadeSession(session);
+    cloudSync.saveGame('lemonade', session);
+  }, []);
+
+  const handleUpdatePropertySession = useCallback((session: PropertySession) => {
+    setPropertySession(session);
+    cloudSync.saveGame('property', session);
+  }, []);
+
+  const handleUpdateStartupSession = useCallback((session: StartupSession) => {
+    setStartupSession(session);
+    cloudSync.saveGame('startup', session);
+  }, []);
+
+  // Reset every game session to its initial state and persist (dev skip / restart).
+  const resetGameSessions = useCallback(() => {
+    const lemonade = createInitialLemonadeSession();
+    const property = createInitialPropertySession();
+    const startup = createInitialStartupSession();
+    const stock = createInitialStockMarketSession();
+    setLemonadeSession(lemonade);
+    setPropertySession(property);
+    setStartupSession(startup);
+    setStockMarketSession(stock);
+    cloudSync.saveGame('lemonade', lemonade);
+    cloudSync.saveGame('property', property);
+    cloudSync.saveGame('startup', startup);
+    cloudSync.saveGame('stockMarket', stock);
   }, []);
 
   const handleDevSkip = (target: DevSkipTarget) => {
     setQuizAnswers(devProfile.answers);
     setProfile(devProfile);
-    setLessonProgress(initialLessonProgress);
+    setLessonProgress(initialLessonProgress); // persists via cloudSync
     setGameProgress(initialGameProgress);
-    setLemonadeSession(createInitialLemonadeSession());
-    setPropertySession(createInitialPropertySession());
-    setStartupSession(createInitialStartupSession());
-    void saveProgress(initialLessonProgress);
-    if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
-    void resetStockMarketSession().then(setStockMarketSession);
+    resetGameSessions();
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen(target);
   };
 
   const handleLogIn = () => {
-    // TODO: navigate to login screen
-    console.log('Log In pressed');
+    setScreen('signin');
   };
 
   const handleQuizComplete = (answers: QuizAnswers) => {
@@ -236,22 +332,27 @@ export default function App() {
     setScreen('signup');
   };
 
-  const handleSignupComplete = (user: SignupProfile) => {
-    setProfile({ user, answers: quizAnswers });
+  // Called by the existing SignupScreen AFTER supabase.auth.signUp succeeds.
+  const handleSignupComplete = (signupUser: SignupProfile) => {
+    setProfile({ user: signupUser, answers: quizAnswers });
     setScreen('dashboard');
+    // Persist onboarding answers + chosen name so a new device reconstructs the
+    // profile. The session arrives asynchronously from signUp, so resolve the
+    // user id explicitly rather than relying on the hydrate effect's timing.
+    void (async () => {
+      const id = await cloudSync.ensureActiveUser();
+      if (!id) return;
+      await cloudSync.saveOnboardingAnswers(quizAnswers, signupUser.name);
+      await cloudSync.saveDisplayName(signupUser.name);
+    })();
   };
 
   const handleRestart = () => {
     setQuizAnswers({});
     setProfile(null);
-    setLessonProgress(initialLessonProgress);
+    setLessonProgress(initialLessonProgress); // persists via cloudSync
     setGameProgress(initialGameProgress);
-    setLemonadeSession(createInitialLemonadeSession());
-    setPropertySession(createInitialPropertySession());
-    setStartupSession(createInitialStartupSession());
-    void saveProgress(initialLessonProgress);
-    if (stockMarketSaveTimerRef.current) clearTimeout(stockMarketSaveTimerRef.current);
-    void resetStockMarketSession().then(setStockMarketSession);
+    resetGameSessions();
     setActiveLessonId(undefined);
     setActiveGameId(undefined);
     setScreen('start');
@@ -456,8 +557,40 @@ export default function App() {
     }
   };
 
+  const handleMigrateConfirm = async () => {
+    setMigrationOpen(false);
+    if (!userId) return;
+    const legacy = await cloudSync.readLegacyLocal();
+    await cloudSync.runMigration(userId, legacy);
+    applySnapshot(await cloudSync.hydrateAll(userId));
+  };
+
+  const handleMigrateDecline = async () => {
+    setMigrationOpen(false);
+    if (userId) await cloudSync.markMigrationPrompted(userId);
+  };
+
   const renderScreen = () => {
+    // While a signed-in user's cloud state loads, hold the splash so we never
+    // flash the logged-out StartScreen before the dashboard appears.
+    if (hydrating && !profile) return <AuthSplash />;
+
     const aiHeaderButton = profile ? <AiHeaderButton onPress={() => setIsAiOpen(true)} /> : undefined;
+    const profileButton = profile ? (
+      <ProfileHeaderButton
+        initial={(profile.user.name || profile.user.email || '?').trim().charAt(0).toUpperCase()}
+        onPress={() => setScreen('profile')}
+      />
+    ) : null;
+
+    if (screen === 'signin') {
+      return (
+        <SignInScreen
+          onBack={() => setScreen('start')}
+          onSignUpLink={() => setScreen('onboarding')}
+        />
+      );
+    }
 
     if (screen === 'onboarding') {
       return (
@@ -482,7 +615,7 @@ export default function App() {
     if (screen === 'dashboard' && profile) {
       return (
         <DashboardScreen
-          aiHeaderButton={aiHeaderButton}
+          aiHeaderButton={<>{profileButton}{aiHeaderButton}</>}
           profile={profile}
           lessonProgress={lessonProgress}
           gameProgress={gameProgress}
@@ -493,6 +626,19 @@ export default function App() {
           onUpdatePortfolio={setPortfolio}
           onOpenDailyTrivia={handleOpenDailyTrivia}
           initialTab={postLessonTab}
+        />
+      );
+    }
+
+    if (screen === 'profile' && profile) {
+      return (
+        <ProfileScreen
+          lessonProgress={lessonProgress}
+          displayName={profile.user.name}
+          onBack={() => setScreen('dashboard')}
+          onDisplayNameChange={(name) =>
+            setProfile((p) => (p ? { ...p, user: { ...p.user, name } } : p))
+          }
         />
       );
     }
@@ -546,9 +692,9 @@ export default function App() {
             stockMarketSession={stockMarketSession}
             onBack={() => setScreen('dashboard')}
             onComplete={handleCompleteGame}
-            onUpdateLemonadeSession={setLemonadeSession}
-            onUpdatePropertySession={setPropertySession}
-            onUpdateStartupSession={setStartupSession}
+            onUpdateLemonadeSession={handleUpdateLemonadeSession}
+            onUpdatePropertySession={handleUpdatePropertySession}
+            onUpdateStartupSession={handleUpdateStartupSession}
             onUpdateStockMarketSession={handleUpdateStockMarketSession}
           />
         );
@@ -560,13 +706,13 @@ export default function App() {
         aiHeaderButton={aiHeaderButton}
         onGetStarted={handleGetStarted}
         onLogIn={handleLogIn}
-        onDevSkip={handleDevSkip}
+        onDevSkip={__DEV__ ? handleDevSkip : undefined}
       />
     );
   };
 
   return (
-    <SafeAreaProvider>
+    <>
       <Animated.View
         style={[
           styles.route,
@@ -589,7 +735,64 @@ export default function App() {
           onSend={handleSendAiMessage}
         />
       )}
-    </SafeAreaProvider>
+      <Modal visible={migrationOpen} transparent animationType="fade" onRequestClose={handleMigrateDecline}>
+        <View style={styles.migrateBackdrop}>
+          <View style={styles.migrateCard}>
+            <Text style={styles.migrateTitle}>Import your progress?</Text>
+            <Text style={styles.migrateBody}>
+              We found existing progress saved on this device. Import it into your account so it syncs across all your devices?
+            </Text>
+            <TouchableOpacity style={styles.migratePrimary} activeOpacity={0.85} onPress={handleMigrateConfirm}>
+              <Text style={styles.migratePrimaryText}>IMPORT PROGRESS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.migrateSecondary} activeOpacity={0.7} onPress={handleMigrateDecline}>
+              <Text style={styles.migrateSecondaryText}>NO THANKS</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+/** Compact round avatar button shown in the dashboard header to open Profile. */
+function ProfileHeaderButton({ initial, onPress }: { initial: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.profileButton} activeOpacity={0.78} onPress={onPress}>
+      <Text style={styles.profileButtonText}>{initial}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Auth gate ────────────────────────────────────────────────────────────────
+
+function AuthSplash() {
+  const [fontsLoaded] = useFonts({ PlayfairDisplay_700Bold });
+  return (
+    <View style={styles.splash}>
+      {fontsLoaded ? <Text style={styles.splashWordmark}>Coinly</Text> : null}
+      <ActivityIndicator color={appColors.black} style={styles.splashSpinner} />
+    </View>
+  );
+}
+
+function AuthGate() {
+  const { loading } = useAuth();
+  // While the persisted session restores, show the splash. Otherwise the app
+  // boots into its existing flow (StartScreen -> onboarding -> sign up / sign in);
+  // Supabase auth is wired into those existing screens, and the session controls
+  // cloud sync. AuthedApp shows a brief splash while it hydrates a signed-in user.
+  if (loading) return <AuthSplash />;
+  return <AuthedApp />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <SafeAreaProvider>
+        <AuthGate />
+      </SafeAreaProvider>
+    </AuthProvider>
   );
 }
 
@@ -606,5 +809,99 @@ function getPageTitle(screen: Screen) {
 const styles = StyleSheet.create({
   route: {
     flex: 1,
+  },
+  splash: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: appColors.green,
+  },
+  splashWordmark: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 64,
+    color: appColors.black,
+    includeFontPadding: false,
+  },
+  splashSpinner: {
+    marginTop: 20,
+  },
+  profileButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: appColors.yellow,
+    borderWidth: 2,
+    borderColor: appColors.black,
+    shadowColor: appColors.black,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 7,
+    elevation: 3,
+  },
+  profileButtonText: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 18,
+    color: appColors.black,
+    includeFontPadding: false,
+  },
+  migrateBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(16,36,29,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  migrateCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: appColors.white,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: appColors.black,
+    padding: 24,
+  },
+  migrateTitle: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 24,
+    color: appColors.black,
+    includeFontPadding: false,
+    marginBottom: 12,
+  },
+  migrateBody: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
+    color: appColors.muted,
+    marginBottom: 24,
+  },
+  migratePrimary: {
+    height: 52,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: appColors.black,
+    backgroundColor: appColors.yellow,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  migratePrimaryText: {
+    fontFamily: 'BebasNeue_400Regular',
+    fontSize: 18,
+    letterSpacing: 1,
+    color: appColors.black,
+  },
+  migrateSecondary: {
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  migrateSecondaryText: {
+    fontFamily: 'BebasNeue_400Regular',
+    fontSize: 16,
+    letterSpacing: 1,
+    color: appColors.muted,
   },
 });

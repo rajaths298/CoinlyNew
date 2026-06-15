@@ -13,6 +13,8 @@ export const ICON = {
   check:   '✓︎', // ✓ check mark       — completed state
   up:      '▲︎', // ▲ upward triangle  — price up
   down:    '▼︎', // ▼ downward triangle — price down
+  close:   '✕︎', // ✕ cross            — remove / undo a placed item
+  lock:    '⊘︎', // ⊘ prohibited       — locked / coming soon
 } as const;
 
 export type IconName = keyof typeof ICON;

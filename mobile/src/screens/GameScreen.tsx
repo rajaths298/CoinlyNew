@@ -56,6 +56,11 @@ import PropertyLadderScreen from './PropertyLadderScreen';
 import StartupStoryScreen from './StartupStoryScreen';
 import StockMarketGameScreen from './StockMarketGameScreen';
 import { appColors as colors } from '../theme';
+import { useTutorial } from '../hooks/useTutorial';
+import TutorialOverlay from '../components/tutorial/TutorialOverlay';
+import TutorialEntryModal from '../components/tutorial/TutorialEntryModal';
+import TutorialHelpButton from '../components/tutorial/TutorialHelpButton';
+import type { TutorialStep } from '../components/tutorial/types';
 import type {
   CustomerDialogue,
   CustomerReview,
@@ -242,6 +247,30 @@ function LemonadeEmpireScreen({
     return () => clearLoopTimers(timerRef, spawnRef);
   }, [phase]);
 
+  // Non-blocking narration that auto-advances with the day's phases, so it
+  // never fights the live timed round or the phase-transition buttons.
+  const scrollRef = useRef<ScrollView>(null);
+  const tutorialSteps = useMemo<TutorialStep[]>(() => [
+    { id: 'location', dim: false, actionGated: true, heading: 'Pick your spot', body: 'Busier locations sell more but cost more rent. Choose where to set up, then tap Go to Market.' },
+    { id: 'supply', dim: false, actionGated: true, heading: 'Stock up', body: 'Buy ingredients for the day — run out and you lose sales, overbuy and you waste cash. Then tap Mix Lemonade.' },
+    { id: 'recipe', dim: false, actionGated: true, heading: 'Set your price', body: 'Tune the recipe and price — too high and customers walk, too low and you barely profit. Then mix to open the stand.' },
+    { id: 'serve', dim: false, actionGated: true, heading: 'Serve customers', body: 'Tap customers before their patience runs out. The day ends when the timer does.' },
+    { id: 'shop', dim: false, heading: 'Grow the business', body: 'After the day you see reviews and your ledger, then the shop — reinvest profits into upgrades to grow. That is the full loop!' },
+  ], []);
+  const tutorial = useTutorial(game.id, tutorialSteps);
+
+  useEffect(() => {
+    if (!tutorial.isActive) return;
+    if (phase !== 'forecast') tutorial.completeStep('location');
+    if (phase === 'mix' || phase === 'stand' || phase === 'reviews' || phase === 'ledger' || phase === 'shop') {
+      tutorial.completeStep('supply');
+    }
+    if (phase === 'stand' || phase === 'reviews' || phase === 'ledger' || phase === 'shop') {
+      tutorial.completeStep('recipe');
+    }
+    if (phase === 'reviews' || phase === 'ledger' || phase === 'shop') tutorial.completeStep('serve');
+  }, [phase, tutorial]);
+
   if (!fontsLoaded) return null;
 
   const setPhaseScreen = (nextPhase: LemonadePhase) => {
@@ -363,6 +392,7 @@ function LemonadeEmpireScreen({
         <Text style={styles.wordmark}>Coinly</Text>
         <View style={styles.headerRightActions}>
           <Text style={styles.headerAction}>GAME</Text>
+          <TutorialHelpButton onPress={tutorial.reset} />
           {aiHeaderButton}
         </View>
       </View>
@@ -391,7 +421,7 @@ function LemonadeEmpireScreen({
           onEndRound={endRound}
         />
       ) : (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
           {phase === 'forecast' ? (
             <ForecastScreen
               session={session}
@@ -438,6 +468,20 @@ function LemonadeEmpireScreen({
           ) : null}
         </ScrollView>
       )}
+      <TutorialEntryModal
+        visible={tutorial.showEntryModal}
+        gameTitle={game.title}
+        onYes={tutorial.startTutorial}
+        onSkip={tutorial.skip}
+      />
+      <TutorialOverlay
+        step={tutorial.currentStep}
+        stepIndex={tutorial.stepIndex}
+        totalSteps={tutorial.totalSteps}
+        onAdvance={tutorial.advance}
+        onSkip={tutorial.skip}
+        scrollRef={scrollRef}
+      />
     </View>
   );
 

@@ -57,6 +57,9 @@ export default function StartScreen({ aiHeaderButton, onGetStarted, onLogIn, onD
   };
 
   const openDevCode = () => {
+    // Dev-only escape hatch: only available when the host wires onDevSkip (gated
+    // behind __DEV__ in App.tsx), so it never opens in a production build.
+    if (!onDevSkip) return;
     setShowDevCode(true);
     setTimeout(() => devInputRef.current?.focus(), 60);
   };

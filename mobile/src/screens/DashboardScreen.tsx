@@ -1209,13 +1209,14 @@ type GameCardProps = {
   onPress: () => void;
 };
 
+// Web-only: a non-clickable cursor for coming-soon cards. `cursor` is a valid
+// react-native-web style but isn't in this RN version's CursorValue union, and
+// it is harmlessly ignored on native.
+const webDefaultCursor = { cursor: 'default' } as unknown as import('react-native').ViewStyle;
+
 function GameCard({ game, isLocked, onPress }: GameCardProps) {
-  return (
-    <TouchableOpacity
-      style={[styles.gameCard, isLocked && styles.gameCardLocked]}
-      activeOpacity={0.84}
-      onPress={onPress}
-    >
+  const content = (
+    <>
       <View style={styles.gameCardHeader}>
         <Text style={styles.gameLabel}>{game.isPlayable ? 'PLAYABLE' : 'COMING NEXT'}</Text>
         <Text style={styles.gameToken}>{isLocked ? 'PREVIEW' : 'PLAY'}</Text>
@@ -1231,6 +1232,26 @@ function GameCard({ game, isLocked, onPress }: GameCardProps) {
       <Text style={styles.gameTitle}>{game.title}</Text>
       <Text style={styles.gameBody}>{game.fantasy}</Text>
       <Text style={styles.gameMeta}>{game.status.toUpperCase()} / {game.estimatedTime} / {game.domain}</Text>
+    </>
+  );
+
+  // Coming-soon games are completely non-interactive: no onPress, no pointer
+  // events at all, and a default (non-clickable) cursor on web. Visuals are
+  // unchanged from the playable cards apart from the existing locked style.
+  if (isLocked) {
+    return (
+      <View
+        style={[styles.gameCard, styles.gameCardLocked, webDefaultCursor]}
+        pointerEvents="none"
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity style={styles.gameCard} activeOpacity={0.84} onPress={onPress}>
+      {content}
     </TouchableOpacity>
   );
 }

@@ -1,0 +1,11 @@
+# Environment files — never commit secrets (Supabase, Gemini, etc.)
+.env
+.env.*
+!.env.example
+mobile/.env
+
+# dependencies
+node_modules/
+
+# macOS
+.DS_Store

@@ -37,6 +37,11 @@ import {
   toPropertyGameResult,
 } from '../engine/propertyLadderEngine';
 import { appColors as colors } from '../theme';
+import { useTutorial } from '../hooks/useTutorial';
+import TutorialOverlay from '../components/tutorial/TutorialOverlay';
+import TutorialEntryModal from '../components/tutorial/TutorialEntryModal';
+import TutorialHelpButton from '../components/tutorial/TutorialHelpButton';
+import type { TutorialStep } from '../components/tutorial/types';
 import type {
   GameDefinition,
   GameResult,
@@ -123,6 +128,31 @@ export default function PropertyLadderScreen({
     onComplete(toPropertyGameResult(session, game.competency));
   }, [game.competency, onComplete, session]);
 
+  const scrollRef = useRef<ScrollView>(null);
+  const progressRef = useRef<View>(null);
+  const diceRef = useRef<View>(null);
+  const decisionRef = useRef<View>(null);
+  const upgradeRef = useRef<View>(null);
+  const ledgerRef = useRef<View>(null);
+  const tutorialSteps = useMemo<TutorialStep[]>(() => [
+    { id: 'progress', targetRef: progressRef, heading: 'Reach the target', body: 'Grow your net worth to the target shown here. This bar tracks how close you are.' },
+    { id: 'roll', targetRef: diceRef, actionGated: true, heading: 'Roll to move', body: 'Tap Roll to move around the board and land on an opportunity.' },
+    { id: 'decision', targetRef: decisionRef, actionGated: true, heading: 'Make the call', body: 'Buy a deal to earn monthly rent, or pass to keep cash. Events work the same way — every choice shifts your cash and risk.' },
+    { id: 'upgrade', targetRef: upgradeRef, actionGated: true, heading: 'Improve the portfolio', body: 'Spend on upgrades to lift rent and value, or skip to keep cash ready for the next deal.' },
+    { id: 'ledger', targetRef: ledgerRef, heading: 'Your month', body: 'Here is the rent collected, costs, and how your net worth moved. Keep playing to reach the target!' },
+  ], []);
+  const tutorial = useTutorial(game.id, tutorialSteps);
+
+  // Action-gated steps advance as the board phase progresses.
+  useEffect(() => {
+    if (!tutorial.isActive) return;
+    if (session.phase !== 'board') tutorial.completeStep('roll');
+    if (session.phase === 'upgrade' || session.phase === 'ledger' || session.phase === 'result') {
+      tutorial.completeStep('decision');
+    }
+    if (session.phase === 'ledger' || session.phase === 'result') tutorial.completeStep('upgrade');
+  }, [session.phase, tutorial]);
+
   if (!fontsLoaded) return null;
 
   const roll = () => {
@@ -168,6 +198,7 @@ export default function PropertyLadderScreen({
   return (
     <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 30 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -178,6 +209,7 @@ export default function PropertyLadderScreen({
           <Text style={styles.wordmark}>Coinly</Text>
           <View style={styles.headerRightActions}>
             <Text style={styles.headerAction}>GAME</Text>
+            <TutorialHelpButton onPress={tutorial.reset} />
             {aiHeaderButton}
           </View>
         </View>
@@ -194,7 +226,7 @@ export default function PropertyLadderScreen({
           <HudCard label="Risk" value={`${session.risk}/100`} alert={session.risk >= 75} />
         </View>
 
-        <View style={styles.progressPanel}>
+        <View style={styles.progressPanel} ref={progressRef}>
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>TARGET {formatMoney(session.targetNetWorth)}</Text>
             <Text style={styles.progressLabel}>{Math.round(progressPct)}%</Text>
@@ -212,31 +244,41 @@ export default function PropertyLadderScreen({
           tokenScale={tokenScale}
         />
 
-        <DicePanel
-          session={session}
-          activeTile={activeTile}
-          onRoll={roll}
-        />
+        <View ref={diceRef}>
+          <DicePanel
+            session={session}
+            activeTile={activeTile}
+            onRoll={roll}
+          />
+        </View>
 
         {session.phase === 'deal' && activeDeal ? (
-          <DealPanel
-            deal={activeDeal}
-            cash={session.cash}
-            onBuy={() => chooseDeal(activeDeal)}
-            onSkip={passDeal}
-          />
+          <View ref={decisionRef}>
+            <DealPanel
+              deal={activeDeal}
+              cash={session.cash}
+              onBuy={() => chooseDeal(activeDeal)}
+              onSkip={passDeal}
+            />
+          </View>
         ) : null}
 
         {session.phase === 'choice' && session.activeChoice ? (
-          <ChoicePanel choice={session.activeChoice} onChoose={chooseEvent} />
+          <View ref={decisionRef}>
+            <ChoicePanel choice={session.activeChoice} onChoose={chooseEvent} />
+          </View>
         ) : null}
 
         {session.phase === 'upgrade' ? (
-          <UpgradePanel session={session} onBuy={chooseUpgrade} onSkip={skipUpgrades} />
+          <View ref={upgradeRef}>
+            <UpgradePanel session={session} onBuy={chooseUpgrade} onSkip={skipUpgrades} />
+          </View>
         ) : null}
 
         {session.phase === 'ledger' && session.lastLedger ? (
-          <LedgerPanel ledger={session.lastLedger} onContinue={continueTurn} />
+          <View ref={ledgerRef}>
+            <LedgerPanel ledger={session.lastLedger} onContinue={continueTurn} />
+          </View>
         ) : null}
 
         {session.phase === 'result' ? (
@@ -245,6 +287,20 @@ export default function PropertyLadderScreen({
 
         <PortfolioPanel session={session} />
       </ScrollView>
+      <TutorialEntryModal
+        visible={tutorial.showEntryModal}
+        gameTitle={game.title}
+        onYes={tutorial.startTutorial}
+        onSkip={tutorial.skip}
+      />
+      <TutorialOverlay
+        step={tutorial.currentStep}
+        stepIndex={tutorial.stepIndex}
+        totalSteps={tutorial.totalSteps}
+        onAdvance={tutorial.advance}
+        onSkip={tutorial.skip}
+        scrollRef={scrollRef}
+      />
     </View>
   );
 }

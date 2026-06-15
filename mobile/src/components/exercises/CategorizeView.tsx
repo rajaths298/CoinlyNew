@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { CategorizeExercise } from '../../types/learn';
+import { ICON } from '../ui/icons';
 
 type Props = {
   exercise: CategorizeExercise;
@@ -24,6 +25,16 @@ export default function CategorizeView({ exercise, onAnswer, answered }: Props) 
     if (!selectedItem || answered) return;
     setAssignments((prev) => ({ ...prev, [selectedItem]: bucketId }));
     setSelectedItem(null);
+  }
+
+  function removeItem(itemId: string) {
+    if (answered) return;
+    setAssignments((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+    if (selectedItem === itemId) setSelectedItem(null);
   }
 
   function handleCheck() {
@@ -59,6 +70,17 @@ export default function CategorizeView({ exercise, onAnswer, answered }: Props) 
                     answered && item.bucketId === assignments[item.id] ? styles.chipCorrect : answered ? styles.chipWrong : null,
                   ]}>
                     <Text style={styles.bucketChipText}>{item.text}</Text>
+                    {!answered && (
+                      <TouchableOpacity
+                        style={styles.removeBtn}
+                        onPress={() => removeItem(item.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${item.text}`}
+                      >
+                        <Text style={styles.removeBtnText}>{ICON.close}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
               </View>
@@ -139,11 +161,26 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   bucketChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 6,
     borderWidth: 1,
     borderColor: '#D0CCB8',
+  },
+  removeBtn: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtnText: {
+    fontSize: 12,
+    color: '#6B745F',
+    fontWeight: '700',
   },
   chipCorrect: {
     backgroundColor: '#D4EDDA',
@@ -154,6 +191,7 @@ const styles = StyleSheet.create({
     borderColor: '#A33A2F',
   },
   bucketChipText: {
+    flex: 1,
     fontSize: 12,
     fontWeight: '600',
     color: '#10241D',

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { budgetStorageKey } from '../services/budgetStorage';
+import * as cloudSync from '../services/cloudSync';
 import DonutChart, { type DonutSegment } from '../components/budget/DonutChart';
 import { AnimatedNumber } from '../components/ui/animations';
 import { appColors as colors } from '../theme';
@@ -652,6 +653,8 @@ export default function BudgetStudio({ profile }: { profile: OnboardingProfile }
       activeView,
     };
     void AsyncStorage.setItem(budgetStorageKey, JSON.stringify(snapshot));
+    // Mirror to the cloud so the user's budget syncs across devices.
+    cloudSync.saveGame('budget', snapshot);
   }, [activeView, billDrafts, budget, categoryDrafts, debtDrafts, draft, isHydrated, setupComplete, setupSkipped, setupStep]);
 
   if (!isHydrated) {

@@ -44,7 +44,9 @@ import {
   isShortingUnlocked,
   cryptoUnlockProgress,
 } from '../../services/portfolioEngine';
-import { savePortfolio } from '../../services/portfolioStorage';
+// Persist trades through the cloud-sync layer (same single-arg signature as the
+// old local store): writes the per-user cache immediately and pushes to Supabase.
+import { savePortfolio } from '../../services/cloudSync';
 import type { Portfolio, Holding, ChartRange, PricePoint } from '../../types/trading';
 import type { LessonProgress } from '../../types/lesson';
 
