@@ -1219,7 +1219,7 @@ function GameCard({ game, isLocked, onPress }: GameCardProps) {
     <>
       <View style={styles.gameCardHeader}>
         <Text style={styles.gameLabel}>{game.isPlayable ? 'PLAYABLE' : 'COMING NEXT'}</Text>
-        <Text style={styles.gameToken}>{isLocked ? 'PREVIEW' : 'PLAY'}</Text>
+        <Text style={styles.gameToken}>{isLocked ? 'LOCKED' : 'PLAY'}</Text>
       </View>
       <View style={styles.masteryRow}>
         {[1, 2, 3, 4, 5].map((ring) => (
