@@ -121,6 +121,13 @@ export async function askExerciseExplanation(
   exerciseContext: string,
   timeoutMs = 8000,
 ): Promise<string> {
+  // Coinly AI is locked pre-launch — short-circuit this lesson entry point too,
+  // mirroring the locked header button. Returns empty with no network request,
+  // so the FeedbackBanner "Explain" affordance silently renders nothing.
+  // TODO: re-enable when Coinly AI launches
+  const AI_LOCKED: boolean = true;
+  if (AI_LOCKED) return '';
+
   const ollamaUrl = 'http://localhost:11434/api/chat';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

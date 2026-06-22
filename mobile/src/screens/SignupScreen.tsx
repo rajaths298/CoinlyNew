@@ -69,7 +69,7 @@ export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Pro
     if (!form.email.trim()) nextErrors.email = 'Enter your email.';
     else if (!emailIsValid) nextErrors.email = 'Use a valid email.';
     if (!form.password) nextErrors.password = 'Create a password.';
-    else if (form.password.length < 6) nextErrors.password = 'Use at least 6 characters.';
+    else if (form.password.length < 8) nextErrors.password = 'Use at least 8 characters.';
     if (!form.confirmPassword) nextErrors.confirmPassword = 'Confirm your password.';
     else if (form.confirmPassword !== form.password) {
       nextErrors.confirmPassword = 'Passwords do not match.';

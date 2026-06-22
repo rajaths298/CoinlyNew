@@ -59,12 +59,34 @@ export type SyncSnapshot = {
 let currentUserId: string | null = null;
 export function setActiveUser(id: string) { currentUserId = id; }
 export function clearActiveUser() {
+  const uid = currentUserId;
   currentUserId = null;
   for (const k of Object.keys(timers)) clearTimeout(timers[k]);
   Object.keys(latest).forEach((k) => delete latest[k]);
   dirty.clear();
+  // Wipe the signed-out user's cached data from disk (fire-and-forget). Legacy
+  // unkeyed keys are left alone — they hold no PII and are overwritten on login.
+  if (uid) void clearUserCache(uid);
 }
 export function getActiveUser() { return currentUserId; }
+
+/** Remove every per-user AsyncStorage cache key for a given uid (on sign-out). */
+async function clearUserCache(uid: string): Promise<void> {
+  try {
+    const fixed = [
+      userKey(PROGRESS, uid),
+      userKey(PORTFOLIO, uid),
+      userKey(META, uid),
+      userKey(DIRTY, uid),
+      userKey(MIGRATION_FLAG, uid),
+    ];
+    const all = await AsyncStorage.getAllKeys();
+    const gameKeys = all.filter((k) => k.startsWith('@coinly_sync_game_') && k.endsWith(`:${uid}`));
+    await AsyncStorage.multiRemove([...fixed, ...gameKeys]);
+  } catch {
+    // Non-fatal: keys are per-user and get overwritten on the next login anyway.
+  }
+}
 
 /**
  * Resolve the active user id, binding it from the live session if needed.
