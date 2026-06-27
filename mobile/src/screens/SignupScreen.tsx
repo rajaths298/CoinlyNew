@@ -23,6 +23,7 @@ type Props = {
   aiHeaderButton?: React.ReactNode;
   onBack: () => void;
   onComplete: (profile: SignupProfile) => void;
+  onGoToLogin: () => void;
 };
 
 type FormState = {
@@ -43,7 +44,7 @@ const initialForm: FormState = {
   acceptedTerms: false,
 };
 
-export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Props) {
+export default function SignupScreen({ aiHeaderButton, onBack, onComplete, onGoToLogin }: Props) {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
@@ -53,6 +54,9 @@ export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Pro
   const [form, setForm] = useState<FormState>(initialForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  // When set, the account was created but needs email confirmation — we swap the
+  // form out for a dedicated "check your email" screen instead of an inline error.
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
 
   if (!fontsLoaded) return null;
 
@@ -98,12 +102,43 @@ export default function SignupScreen({ aiHeaderButton, onBack, onComplete }: Pro
       return;
     }
     if (needsConfirmation) {
-      setErrors((e) => ({ ...e, email: 'Check your email to confirm your account, then log in.' }));
+      setConfirmationEmail(email);
       return;
     }
     // Account created and signed in — hand off to the app (sets profile + dashboard).
     onComplete({ name, email });
   };
+
+  if (confirmationEmail) {
+    return (
+      <View
+        style={[
+          styles.screen,
+          styles.content,
+          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 28 },
+        ]}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerAction} />
+          <Text style={styles.wordmark}>Coinly</Text>
+          <View style={styles.headerRightActions}>{aiHeaderButton}</View>
+        </View>
+
+        <View style={styles.confirmBody}>
+          <Text style={styles.eyebrow}>ALMOST THERE</Text>
+          <Text style={styles.title}>Check your email</Text>
+          <Text style={styles.body}>
+            We sent a confirmation link to {confirmationEmail}. Tap it to verify your account, then
+            log in to start building your dashboard.
+          </Text>
+        </View>
+
+        <TouchableOpacity style={styles.submitButton} activeOpacity={0.86} onPress={onGoToLogin}>
+          <Text style={styles.submitText}>GO TO LOG IN</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -271,6 +306,10 @@ const styles = StyleSheet.create({
   },
   hero: {
     marginTop: 54,
+  },
+  confirmBody: {
+    flex: 1,
+    justifyContent: 'center',
   },
   eyebrow: {
     color: colors.black,

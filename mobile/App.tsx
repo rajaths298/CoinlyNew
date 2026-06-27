@@ -608,6 +608,7 @@ function AuthedApp() {
           aiHeaderButton={aiHeaderButton}
           onBack={() => setScreen('onboarding')}
           onComplete={handleSignupComplete}
+          onGoToLogin={() => setScreen('signin')}
         />
       );
     }
